@@ -9,6 +9,13 @@
 ```
 deployments/
 ├── docker-compose-*.yml           # Docker Compose 配置文件
+├── data/                          # 数据存储目录（自动创建）
+│   ├── ceph-demo/                # Ceph 集群数据
+│   ├── prometheus/               # Prometheus 时序数据
+│   ├── grafana/                  # Grafana 仪表板
+│   ├── alertmanager/             # Alertmanager 告警
+│   ├── elasticsearch/            # Elasticsearch 索引
+│   └── test/                     # 测试环境数据
 ├── prometheus/                    # Prometheus 配置
 │   ├── prometheus.yml            # 主配置
 │   └── alert_rules.yml           # 告警规则
@@ -32,11 +39,21 @@ deployments/
 
 ```bash
 # 轻量级完整栈（推荐）
+# 会自动初始化 ./data/ 目录
+./scripts/deploy.sh full
+
+# 或手动部署
+# 1. 初始化数据目录
+./scripts/deploy.sh init
+
+# 2. 启动服务
 docker-compose -f docker-compose-lightweight-full.yml up -d
 
 # 或标准监控栈
 docker-compose up -d
 ```
+
+**数据存储**: 所有服务数据存储在 `./data/` 目录，详见 [DATA_STORAGE.md](DATA_STORAGE.md)。
 
 ---
 
@@ -63,6 +80,9 @@ docker-compose up -d
 通用部署脚本，适用于 CentOS 7 + Docker 环境。
 
 ```bash
+# 初始化数据目录
+./scripts/deploy.sh init
+
 # 完整部署
 ./scripts/deploy.sh full
 
@@ -74,6 +94,9 @@ docker-compose up -d
 
 # 查看状态
 ./scripts/deploy.sh status
+
+# 清理数据
+./scripts/deploy.sh clean
 ```
 
 ---
@@ -107,6 +130,7 @@ docker-compose up -d
 
 - **[统一部署指南](../DEPLOYMENT_GUIDE.md)** - 完整的部署步骤和说明 ⭐
 - **[镜像配置指南](../DOCKER_MIRROR_CONFIGURATION.md)** - Docker 镜像加速配置
+- **[数据存储说明](DATA_STORAGE.md)** - 数据目录结构和管理 ⭐
 
 ---
 
@@ -123,10 +147,16 @@ docker-compose logs -f
 docker-compose down
 
 # 停止并删除数据
-docker-compose down -v
+./scripts/deploy.sh clean
 
 # 重启服务
 docker-compose restart
+
+# 备份数据
+tar -czf backup-$(date +%Y%m%d).tar.gz data/
+
+# 查看数据占用
+du -sh data/*
 ```
 
 ---
@@ -141,10 +171,11 @@ docker-compose restart
 
 ## 📝 更新日志
 
+- **2026-03-08**: 改用绑定挂载，数据存储在 ./data/ 目录
 - **2026-03-07**: 所有配置文件和文档已同步到最新状态
 - **2026-03-07**: 更新为 CentOS 7 + Docker 环境
 - **2026-03-02**: 新增轻量级完整部署配置
 
 ---
 
-**最后更新**: 2026-03-07
+**最后更新**: 2026-03-08

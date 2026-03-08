@@ -317,7 +317,7 @@ services:
       #   - 此卷包含所有实际存储的数据
       #   - 删除此卷会导致所有数据丢失
       #   - 生产环境建议定期备份
-      - ceph-demo-data:/var/lib/ceph
+      - ./data/ceph-demo/data:/var/lib/ceph
 
       # Ceph 配置目录挂载
       # 容器内路径: /etc/ceph
@@ -331,7 +331,7 @@ services:
       #   - 客户端连接集群需要读取配置和密钥
       #   - 可以将此卷共享给其他需要访问 Ceph 的容器
       #   - 便于备份和恢复集群配置
-      - ceph-demo-config:/etc/ceph
+      - ./data/ceph-demo/config:/etc/ceph
 
     # -------------------------------------------------------------------------
     # 特权模式配置
@@ -443,93 +443,69 @@ networks:
         - subnet: 172.20.0.0/16
 
 # =============================================================================
-# 数据卷配置区域
+# 数据存储说明
 # =============================================================================
-# volumes: 定义 Docker 命名卷 (Named Volumes)
-# 用途: 实现数据持久化和容器间数据共享
-
-volumes:
-  # ---------------------------------------------------------------------------
-  # ceph-demo-data: Ceph 数据存储卷 (关键数据卷)
-  # ---------------------------------------------------------------------------
-  # 用途:
-  #   存储 Ceph 集群的所有运行时数据
-  #
-  # 存储内容:
-  #   - /var/lib/ceph/osd/: OSD 数据文件
-  #     * 实际存储的对象数据
-  #     * OSD 元数据和日志
-  #   - /var/lib/ceph/mon/: Monitor 数据库
-  #     * 集群状态映射 (cluster map)
-  #     * 配置历史记录
-  #   - /var/lib/ceph/mds/: MDS 元数据
-  #     * CephFS 文件系统元数据
-  #   - /var/lib/ceph/radosgw/: RGW 数据
-  #     * 对象存储元数据
-  #
-  # 数据卷特性:
-  #   ✓ 数据独立于容器生命周期
-  #   ✓ 容器删除后数据保留
-  #   ✓ 支持备份和恢复
-  #   ✓ 性能优于绑定挂载
-  #
-  # 数据卷位置:
-  #   Linux: /var/lib/docker/volumes/ceph-demo-data/_data
-  #   Windows: C:\ProgramData\Docker\volumes\ceph-demo-data\_data
-  #   Mac: ~/Library/Containers/com.docker.docker/Data/vms/0/
-  #
-  # 管理命令:
-  #   查看卷: docker volume inspect ceph-demo-data
-  #   备份卷: docker run --rm -v ceph-demo-data:/data -v $(pwd):/backup alpine tar czf /backup/ceph-data.tar.gz /data
-  #   删除卷: docker volume rm ceph-demo-data (⚠ 会永久删除所有数据)
-  #
-  # 注意事项:
-  #   ⚠ 删除此卷会导致所有存储数据丢失
-  #   ⚠ 生产环境必须定期备份
-  #   ⚠ 确保宿主机有足够的磁盘空间
-  ceph-demo-data:
-
-  # ---------------------------------------------------------------------------
-  # ceph-demo-config: Ceph 配置文件卷
-  # ---------------------------------------------------------------------------
-  # 用途:
-  #   存储 Ceph 集群的配置文件和认证密钥
-  #
-  # 存储内容:
-  #   - ceph.conf: Ceph 集群主配置文件
-  #     * 集群标识 (fsid)
-  #     * Monitor 地址列表
-  #     * 网络配置
-  #     * 性能参数
-  #   - ceph.client.admin.keyring: 管理员密钥环
-  #     * 用于管理操作的认证密钥
-  #     * 拥有集群的完全访问权限
-  #   - ceph.mon.keyring: Monitor 密钥环
-  #     * Monitor 间通信的认证密钥
-  #   - 其他密钥文件:
-  #     * OSD 密钥
-  #     * MDS 密钥
-  #     * RGW 密钥
-  #
-  # 共享用途:
-  #   - 可以挂载到其他需要访问 Ceph 的容器
-  #   - ceph-exporter 需要读取配置和密钥
-  #   - 客户端容器需要配置文件连接集群
-  #
-  # 挂载模式建议:
-  #   - 管理容器: 读写模式 (rw)
-  #   - 客户端容器: 只读模式 (ro) - 提高安全性
-  #
-  # 安全考虑:
-  #   ⚠ 密钥文件包含敏感信息
-  #   ⚠ 应限制文件权限 (600 或 400)
-  #   ⚠ 不要将密钥提交到代码仓库
-  #   ⚠ 定期轮换密钥
-  #
-  # 管理命令:
-  #   查看配置: docker run --rm -v ceph-demo-config:/etc/ceph alpine cat /etc/ceph/ceph.conf
-  #   备份配置: docker run --rm -v ceph-demo-config:/config -v $(pwd):/backup alpine tar czf /backup/ceph-config.tar.gz /config
-  ceph-demo-config:
+# 本项目使用绑定挂载 (bind mount) 方式存储数据
+#
+# 数据存储位置: ./data/ceph-demo/ 目录
+#   - ./data/ceph-demo/data/     → Ceph 集群数据 (OSD、Mon、MDS、RGW 数据)
+#   - ./data/ceph-demo/config/   → Ceph 配置文件和密钥
+#
+# 【存储内容详细说明】
+#
+# data/ 目录存储:
+#   - /var/lib/ceph/osd/: OSD 数据文件
+#     * 实际存储的对象数据
+#     * OSD 元数据和日志
+#   - /var/lib/ceph/mon/: Monitor 数据库
+#     * 集群状态映射 (cluster map)
+#     * 配置历史记录
+#   - /var/lib/ceph/mds/: MDS 元数据
+#     * CephFS 文件系统元数据
+#   - /var/lib/ceph/radosgw/: RGW 数据
+#     * 对象存储元数据
+#
+# config/ 目录存储:
+#   - ceph.conf: Ceph 集群主配置文件
+#   - ceph.client.admin.keyring: 管理员密钥环
+#   - ceph.mon.keyring: Monitor 密钥环
+#   - 其他密钥文件 (OSD、MDS、RGW 密钥)
+#
+# 【优势】
+#   ✓ 数据位置明确: ./data/ceph-demo/
+#   ✓ 备份简单: tar -czf backup.tar.gz data/ceph-demo/
+#   ✓ 迁移方便: 直接复制目录
+#   ✓ 调试友好: 可直接查看配置和日志
+#   ✓ 权限控制: 使用文件系统权限
+#
+# 【初始化】
+#   首次部署前需要初始化数据目录:
+#     ./scripts/deploy.sh init
+#   或手动创建:
+#     mkdir -p data/ceph-demo/{data,config}
+#
+# 【安全考虑】
+#   ⚠ config/ 目录包含敏感密钥文件
+#   ⚠ 应限制文件权限 (600 或 400)
+#   ⚠ 不要将密钥提交到代码仓库
+#   ⚠ 定期轮换密钥
+#
+# 【备份和恢复】
+#   备份: tar -czf ceph-backup-$(date +%Y%m%d).tar.gz data/ceph-demo/
+#   恢复: tar -xzf ceph-backup-20260308.tar.gz
+#
+# 【清理数据】
+#   停止服务并删除数据:
+#     docker-compose -f docker-compose-ceph-demo.yml down
+#     rm -rf data/ceph-demo/
+#   或使用脚本:
+#     ./scripts/clean-volumes.sh
+#
+# 【详细文档】
+#   查看完整的数据存储说明:
+#     cat DATA_STORAGE.md
+#
+# =============================================================================
 
 # =============================================================================
 # 配置文件结束

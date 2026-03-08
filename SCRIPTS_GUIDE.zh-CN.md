@@ -183,16 +183,14 @@
 
 **关键技术点**:
 ```bash
-# 使用临时容器清理数据卷
-docker run --rm \                          # --rm: 容器退出后自动删除
-  -v deployments_ceph-demo-data:/data \    # 挂载数据卷
-  alpine \                                 # 使用轻量级镜像
-  sh -c "rm -rf /data/* /data/.*"          # 删除所有文件
+# 清理数据目录
+cd deployments
+rm -rf data/ceph-demo/*
 
-# 为什么不直接删除卷？
-# - docker volume rm 只能删除未使用的卷
-# - 清空内容后重新初始化更安全
-# - 保留卷的权限和配置
+# 为什么不使用 Docker 卷？
+# - 本项目使用绑定挂载，数据存储在 ./data/ 目录
+# - 直接删除目录内容即可
+# - 更简单、更直观
 ```
 
 ---

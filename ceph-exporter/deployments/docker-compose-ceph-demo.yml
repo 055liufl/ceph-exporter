@@ -22,8 +22,8 @@ services:
       ceph-network:
         ipv4_address: 172.20.0.10
     volumes:
-      - ceph-demo-data:/var/lib/ceph
-      - ceph-demo-config:/etc/ceph
+      - ./data/ceph-demo/data:/var/lib/ceph
+      - ./data/ceph-demo/config:/etc/ceph
     privileged: true
     restart: unless-stopped
 
@@ -33,7 +33,3 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
-
-volumes:
-  ceph-demo-data:
-  ceph-demo-config:

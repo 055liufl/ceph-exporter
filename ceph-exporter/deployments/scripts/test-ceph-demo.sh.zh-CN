@@ -1,0 +1,247 @@
+#!/bin/bash
+# =============================================================================
+# 使用 Ceph Demo 独立配置测试 (详细中文注释版)
+# =============================================================================
+# 【脚本用途】
+#   使用独立的 Ceph Demo 配置进行测试
+#   解决 MON_IP 配置问题，使用固定 IP 地址 172.20.0.10
+#
+# 【使用场景】
+#   - Ceph 集群启动失败
+#   - MON_IP 配置问题
+#   - 需要独立测试 Ceph Demo
+#   - 排查 Ceph 相关问题
+#
+# 【执行步骤】
+#   1. 停止所有服务
+#   2. 强制删除所有数据卷
+#   3. 启动 Ceph Demo（使用固定 IP）
+#   4. 等待 5 分钟让 Ceph 完全初始化
+#   5. 检查 ceph-demo 状态
+#   6. 查看日志
+#   7. 检查配置文件
+#   8. 测试 Ceph 集群
+#
+# 【使用方法】
+#   cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+#   ./scripts/test-ceph-demo.sh
+#
+# 【注意事项】
+#   ⚠️ 此脚本会删除所有数据卷
+#   ⚠️ 会停止所有正在运行的服务
+#   ⚠️ 需要等待 5 分钟让 Ceph 初始化
+#
+# 【配置说明】
+#   - 使用 docker-compose-ceph-demo.yml 配置
+#   - 固定 IP: 172.20.0.10
+#   - 网络: 172.20.0.0/16
+#   - 端口: 8080 (Ceph Dashboard)
+#
+# =============================================================================
+
+set -e
+
+echo "=========================================="
+echo "使用 Ceph Demo 独立配置"
+echo "=========================================="
+echo ""
+echo "此配置使用固定 IP 地址 172.20.0.10"
+echo "这应该能解决 MON_IP 的问题"
+echo ""
+echo "⚠️  警告: 此操作将:"
+echo "  1. 停止所有服务"
+echo "  2. 删除所有数据卷"
+echo "  3. 重新启动 Ceph Demo"
+echo ""
+read -p "确认继续? (输入 yes): " confirm
+
+if [ "$confirm" != "yes" ]; then
+    echo "操作已取消"
+    exit 0
+fi
+
+# 切换到部署目录
+cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+
+# -----------------------------------------------------------------------------
+# 步骤 1: 停止所有服务
+# -----------------------------------------------------------------------------
+# 功能: 停止所有正在运行的 Docker Compose 服务
+# 包括: 完整栈和独立 Ceph Demo
+echo ""
+echo "步骤 1: 停止所有服务..."
+
+# 停止完整监控栈
+# -f: 指定配置文件
+# down: 停止并删除容器
+# 2>/dev/null: 忽略错误输出
+# || true: 即使失败也继续执行
+docker-compose -f docker-compose-lightweight-full.yml down 2>/dev/null || true
+
+# 停止独立 Ceph Demo
+docker-compose -f docker-compose-ceph-demo.yml down 2>/dev/null || true
+
+# -----------------------------------------------------------------------------
+# 步骤 2: 强制删除所有数据卷
+# -----------------------------------------------------------------------------
+# 功能: 清理旧的数据卷，确保干净的环境
+# 注意: 这会删除所有未使用的卷
+echo ""
+echo "步骤 2: 强制删除所有数据卷..."
+echo "⚠️  这将删除所有未使用的 Docker 卷"
+
+# docker volume prune: 删除所有未使用的卷
+# -f: 强制执行，不询问确认
+docker volume prune -f
+
+# -----------------------------------------------------------------------------
+# 步骤 3: 启动 Ceph Demo（使用固定 IP）
+# -----------------------------------------------------------------------------
+# 功能: 使用独立配置启动 Ceph Demo
+# 配置文件: docker-compose-ceph-demo.yml
+# 特点:
+#   - 使用固定 IP 地址 172.20.0.10
+#   - 独立网络 172.20.0.0/16
+#   - 包含所有 Ceph 守护进程 (MON, MGR, OSD, RGW)
+echo ""
+echo "步骤 3: 启动 Ceph Demo（使用固定 IP）..."
+
+# -f: 指定配置文件
+# up: 创建并启动容器
+# -d: 后台运行
+docker-compose -f docker-compose-ceph-demo.yml up -d
+
+# -----------------------------------------------------------------------------
+# 步骤 4: 等待 5 分钟让 Ceph 完全初始化
+# -----------------------------------------------------------------------------
+# 功能: 等待 Ceph 集群完全启动
+# 原因:
+#   - Ceph 初始化需要时间
+#   - MON 需要形成 quorum
+#   - OSD 需要启动并加入集群
+#   - MGR 需要连接到 MON
+echo ""
+echo "步骤 4: 等待 5 分钟让 Ceph 完全初始化..."
+echo "Ceph 集群初始化过程:"
+echo "  1. Monitor 启动并形成 quorum (约 30 秒)"
+echo "  2. Manager 启动并连接 Monitor (约 30 秒)"
+echo "  3. OSD 启动并加入集群 (约 1-2 分钟)"
+echo "  4. RGW 启动并初始化 (约 1-2 分钟)"
+echo ""
+
+# 循环 300 秒 (5 分钟)
+for i in {1..300}; do
+    echo -n "."
+    sleep 1
+    # 每 30 秒显示一次进度
+    if [ $((i % 30)) -eq 0 ]; then
+        echo " ${i}秒"
+    fi
+done
+echo ""
+
+# -----------------------------------------------------------------------------
+# 步骤 5: 检查 ceph-demo 状态
+# -----------------------------------------------------------------------------
+# 功能: 验证 ceph-demo 容器是否正常运行
+echo ""
+echo "步骤 5: 检查 ceph-demo 状态..."
+
+# docker ps: 列出运行中的容器
+# --filter name=ceph-demo: 只显示名称包含 ceph-demo 的容器
+docker ps --filter name=ceph-demo
+
+# -----------------------------------------------------------------------------
+# 步骤 6: 查看日志
+# -----------------------------------------------------------------------------
+# 功能: 查看 ceph-demo 容器的最近日志
+# 帮助: 通过日志判断 Ceph 是否正常启动
+echo ""
+echo "步骤 6: 查看日志..."
+echo "查找以下关键信息:"
+echo "  - 'cluster [health] HEALTH_OK' - 集群健康"
+echo "  - 'mon.ceph-demo is new leader' - Monitor 正常"
+echo "  - 'osd.X is up' - OSD 正常"
+echo ""
+
+# docker logs: 查看容器日志
+# --tail 50: 只显示最后 50 行
+docker logs ceph-demo --tail 50
+
+# -----------------------------------------------------------------------------
+# 步骤 7: 检查配置文件
+# -----------------------------------------------------------------------------
+# 功能: 验证 Ceph 配置文件是否正确生成
+# 重点: 检查 MON_IP 是否为 172.20.0.10
+echo ""
+echo "步骤 7: 检查配置文件..."
+echo "验证 MON_IP 配置:"
+
+# docker exec: 在容器中执行命令
+# cat /etc/ceph/ceph.conf: 显示配置文件内容
+# 2>&1: 重定向错误输出到标准输出
+# || echo "⚠️  无法读取": 如果失败则显示警告
+docker exec ceph-demo cat /etc/ceph/ceph.conf 2>&1 || echo "⚠️  无法读取配置文件"
+
+# -----------------------------------------------------------------------------
+# 步骤 8: 测试 Ceph 集群
+# -----------------------------------------------------------------------------
+# 功能: 执行 ceph -s 命令测试集群状态
+# 期望输出:
+#   - cluster: HEALTH_OK
+#   - mon: 1 daemons
+#   - mgr: active
+#   - osd: X osds: X up, X in
+echo ""
+echo "步骤 8: 测试 Ceph 集群..."
+echo "期望看到 'HEALTH_OK' 状态"
+echo ""
+
+# timeout 30: 30 秒超时
+# docker exec: 在容器中执行命令
+# ceph -s: 显示集群状态
+# 2>&1: 重定向错误输出
+# || echo "⚠️  Ceph 命令超时": 超时则显示警告
+timeout 30 docker exec ceph-demo ceph -s 2>&1 || {
+    echo "⚠️  Ceph 命令超时或失败"
+    echo ""
+    echo "可能原因:"
+    echo "  1. Ceph 集群尚未完全初始化（再等待 2-3 分钟）"
+    echo "  2. Monitor 未形成 quorum"
+    echo "  3. OSD 未启动"
+    echo ""
+    echo "建议操作:"
+    echo "  1. 等待 2-3 分钟后重试: docker exec ceph-demo ceph -s"
+    echo "  2. 查看详细日志: docker logs ceph-demo"
+    echo "  3. 检查容器状态: docker ps"
+}
+
+# -----------------------------------------------------------------------------
+# 测试完成
+# -----------------------------------------------------------------------------
+echo ""
+echo "=========================================="
+echo "Ceph Demo 测试完成"
+echo "=========================================="
+echo ""
+
+# 显示后续操作建议
+echo "如果 Ceph 正常，请执行以下步骤启动完整监控栈:"
+echo ""
+echo "  cd /home/lfl/ceph-exporter/ceph-exporter/deployments"
+echo "  sudo docker-compose -f docker-compose-lightweight-full.yml up -d"
+echo ""
+echo "如果 Ceph 仍有问题，请:"
+echo ""
+echo "  1. 查看详细日志:"
+echo "     docker logs ceph-demo | less"
+echo ""
+echo "  2. 进入容器调试:"
+echo "     docker exec -it ceph-demo bash"
+echo ""
+echo "  3. 检查网络配置:"
+echo "     docker network inspect deployments_ceph-network"
+echo ""
+echo "  4. 运行诊断脚本:"
+echo "     ./scripts/diagnose.sh"
+echo ""

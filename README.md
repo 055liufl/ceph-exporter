@@ -44,8 +44,12 @@ sudo systemctl restart docker
 
 ```bash
 cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+
+# 自动部署（会自动初始化数据目录）
 ./scripts/deploy.sh full
 ```
+
+**数据存储**: 所有服务数据存储在 `./data/` 目录，包括 Ceph、Prometheus、Grafana 等。详见 [数据存储说明](ceph-exporter/deployments/DATA_STORAGE.md)。
 
 ### 5. 访问服务
 
@@ -61,31 +65,46 @@ cd /home/lfl/ceph-exporter/ceph-exporter/deployments
 
 ```bash
 cd ceph-exporter/deployments
+
+# 初始化数据目录（首次部署）
+./scripts/deploy.sh init
+
+# 启动服务
 docker-compose -f docker-compose-integration-test.yml up -d
 ```
 
 **包含**: Ceph Demo + ceph-exporter + Prometheus + Grafana
 **资源**: 2-3GB 内存，2 CPU
+**数据**: 存储在 `./data/test/` 目录
 
 ### 方式 2: 完整监控栈（推荐用于演示）
 
 ```bash
 cd ceph-exporter/deployments
+
+# 自动部署（自动初始化数据目录）
 ./scripts/deploy.sh full
 ```
 
 **包含**: Ceph Demo + 监控 + ELK + Jaeger
 **资源**: 4-6GB 内存，2-4 CPU
+**数据**: 存储在 `./data/` 目录
 
 ### 方式 3: 最小监控栈（生产环境）
 
 ```bash
 cd ceph-exporter/deployments
+
+# 初始化数据目录（首次部署）
+./scripts/deploy.sh init
+
+# 启动服务
 docker-compose up -d
 ```
 
 **包含**: ceph-exporter + Prometheus + Grafana
 **资源**: 1GB 内存，1-2 CPU
+**数据**: 存储在 `./data/` 目录
 
 ---
 
@@ -103,6 +122,16 @@ docker-compose up -d
 
 # 停止服务
 ./scripts/deploy.sh stop
+
+# 清理数据（删除 ./data/ 目录）
+./scripts/deploy.sh clean
+
+# 备份数据
+tar -czf backup-$(date +%Y%m%d).tar.gz data/
+
+# 查看数据占用
+du -sh data/*
+```
 
 # 清理数据
 ./scripts/clean-volumes.sh
@@ -125,6 +154,7 @@ ceph-exporter/
 │   └── plugin/                 # 插件系统
 ├── configs/                    # 配置文件
 ├── deployments/                # 部署配置
+│   ├── data/                   # 数据存储目录（自动创建）
 │   ├── scripts/                # 部署脚本
 │   └── *.yml                   # Docker Compose 配置
 └── test/integration/           # 集成测试
@@ -243,6 +273,7 @@ sudo firewall-cmd --reload
 - **DOCKER_MIRROR_CONFIGURATION.md** - Docker 镜像加速配置
 - **ceph-exporter/README.md** - 项目详细文档（架构、验收清单）
 - **ceph-exporter/deployments/README.md** - 部署配置说明
+- **ceph-exporter/deployments/DATA_STORAGE.md** - 数据存储说明 ⭐
 - **ceph-exporter/test/integration/README.md** - 集成测试文档
 
 ---

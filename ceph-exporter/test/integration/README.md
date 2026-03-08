@@ -164,12 +164,15 @@ curl http://localhost:9093/-/healthy
 ### 数据持久化问题
 
 ```bash
-# 查看数据卷
-docker volume ls
-docker volume inspect ceph-exporter-prometheus-data
+# 查看数据目录
+ls -lh ../../deployments/data/
 
-# 清理数据卷（谨慎使用）
-docker-compose -f ../../deployments/docker-compose.yml down -v
+# 查看数据占用
+du -sh ../../deployments/data/*
+
+# 清理数据（谨慎使用）
+cd ../../deployments
+./scripts/deploy.sh clean
 ```
 
 ## 测试覆盖的验收标准

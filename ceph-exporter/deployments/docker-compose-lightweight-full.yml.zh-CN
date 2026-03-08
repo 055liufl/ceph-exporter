@@ -240,12 +240,12 @@ services:
     volumes:
       # Ceph 数据卷
       # 存储 OSD 数据、Mon 数据等
-      - ceph-demo-data:/var/lib/ceph
+      - ./data/ceph-demo/data:/var/lib/ceph
 
       # Ceph 配置卷
       # 存储配置文件和密钥
       # 需要共享给 ceph-exporter
-      - ceph-demo-config:/etc/ceph
+      - ./data/ceph-demo/config:/etc/ceph
 
     # -------------------------------------------------------------------------
     # 特权模式
@@ -328,7 +328,7 @@ services:
     volumes:
       # Ceph 配置目录 (只读)
       # 从 ceph-demo 共享
-      - ceph-demo-config:/etc/ceph:ro
+      - ./data/ceph-demo/config:/etc/ceph:ro
 
       # ceph-exporter 配置文件 (只读)
       - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
@@ -404,7 +404,7 @@ services:
     volumes:
       # Prometheus 数据卷
       # 存储时序数据
-      - prometheus-data:/prometheus
+      - ./data/prometheus:/prometheus
 
     # -------------------------------------------------------------------------
     # 重启策略
@@ -471,7 +471,7 @@ services:
     # -------------------------------------------------------------------------
     volumes:
       # Grafana 数据卷
-      - grafana-data:/var/lib/grafana
+      - ./data/grafana:/var/lib/grafana
 
     # -------------------------------------------------------------------------
     # 重启策略
@@ -533,7 +533,7 @@ services:
     # -------------------------------------------------------------------------
     volumes:
       # Alertmanager 数据卷
-      - alertmanager-data:/alertmanager
+      - ./data/alertmanager:/alertmanager
 
     # -------------------------------------------------------------------------
     # 重启策略
@@ -636,7 +636,7 @@ services:
       # Elasticsearch 数据卷
       # 存储索引数据
       # 路径: /usr/share/elasticsearch/data
-      - elasticsearch-data:/usr/share/elasticsearch/data
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
 
     # -------------------------------------------------------------------------
     # 重启策略
@@ -954,41 +954,53 @@ networks:
     driver: bridge
 
 # =============================================================================
-# 数据卷配置区域
+# 数据存储说明
 # =============================================================================
-# 定义所有服务使用的持久化数据卷
-volumes:
-
-  # ---------------------------------------------------------------------------
-  # Ceph 相关数据卷
-  # ---------------------------------------------------------------------------
-  # ceph-demo-data: Ceph 集群数据
-  # 存储 OSD 数据、Mon 数据等
-  ceph-demo-data:
-
-  # ceph-demo-config: Ceph 配置和密钥
-  # 需要共享给 ceph-exporter
-  ceph-demo-config:
-
-  # ---------------------------------------------------------------------------
-  # 监控相关数据卷
-  # ---------------------------------------------------------------------------
-  # prometheus-data: Prometheus 时序数据
-  # 保留 7 天数据
-  prometheus-data:
-
-  # grafana-data: Grafana 配置和仪表板
-  grafana-data:
-
-  # alertmanager-data: Alertmanager 配置和状态
-  alertmanager-data:
-
-  # ---------------------------------------------------------------------------
-  # 日志相关数据卷
-  # ---------------------------------------------------------------------------
-  # elasticsearch-data: Elasticsearch 索引数据
-  # 存储所有日志数据
-  elasticsearch-data:
+# 本项目使用绑定挂载 (bind mount) 方式存储数据
+#
+# 数据存储位置: ./data/ 目录
+#   - ./data/ceph-demo/data/     → Ceph 集群数据 (OSD、Mon 数据)
+#   - ./data/ceph-demo/config/   → Ceph 配置文件和密钥
+#   - ./data/prometheus/         → Prometheus 时序数据 (保留 7 天)
+#   - ./data/grafana/            → Grafana 仪表板和配置
+#   - ./data/alertmanager/       → Alertmanager 告警状态
+#   - ./data/elasticsearch/      → Elasticsearch 索引数据
+#
+# 【优势】
+#   ✓ 数据位置明确,易于查看: ls -lh data/
+#   ✓ 备份简单: tar -czf backup.tar.gz data/
+#   ✓ 迁移方便: 直接复制 data/ 目录
+#   ✓ 权限控制: 使用文件系统权限
+#   ✓ 调试友好: 可直接查看和修改数据文件
+#
+# 【初始化】
+#   首次部署前需要初始化数据目录:
+#     ./scripts/deploy.sh init
+#   或在部署时自动初始化:
+#     ./scripts/deploy.sh full
+#
+# 【权限设置】
+#   - Grafana: 需要 UID 472 权限
+#     chown -R 472:472 data/grafana
+#   - Elasticsearch: 需要 UID 1000 权限
+#     chown -R 1000:1000 data/elasticsearch
+#   - 其他服务: 使用当前用户权限
+#
+# 【备份和恢复】
+#   备份: tar -czf backup-$(date +%Y%m%d).tar.gz data/
+#   恢复: tar -xzf backup-20260308.tar.gz
+#
+# 【清理数据】
+#   停止服务并删除数据:
+#     ./scripts/deploy.sh clean
+#   或手动删除:
+#     docker-compose down && rm -rf data/
+#
+# 【详细文档】
+#   查看完整的数据存储说明:
+#     cat DATA_STORAGE.md
+#
+# =============================================================================
 
 # =============================================================================
 # 配置文件结束

@@ -261,9 +261,47 @@ pull_images() {
     done
 }
 
+# 初始化数据目录
+init_data_dirs() {
+    log_step "初始化数据目录..."
+
+    cd "$DEPLOY_DIR"
+
+    # 创建数据目录
+    log_info "创建数据目录结构..."
+    mkdir -p data/{ceph-demo/{data,config},prometheus,grafana,alertmanager,elasticsearch}
+    mkdir -p data/test/{ceph-demo/{data,config},prometheus,grafana}
+
+    # 设置权限
+    log_info "设置目录权限..."
+
+    # Grafana 需要 472 用户权限
+    if command -v sudo &> /dev/null; then
+        sudo chown -R 472:472 data/grafana data/test/grafana 2>/dev/null || {
+            log_warn "无法设置 Grafana 目录权限，可能需要手动设置"
+        }
+
+        # Elasticsearch 需要 1000 用户权限
+        sudo chown -R 1000:1000 data/elasticsearch 2>/dev/null || {
+            log_warn "无法设置 Elasticsearch 目录权限，可能需要手动设置"
+        }
+
+        # 其他服务使用当前用户权限
+        sudo chown -R $USER:$USER data/prometheus data/alertmanager 2>/dev/null || true
+        sudo chown -R $USER:$USER data/test/prometheus 2>/dev/null || true
+    else
+        log_warn "未检测到 sudo，跳过权限设置"
+    fi
+
+    log_info "数据目录初始化完成"
+    log_info "数据存储位置: $DEPLOY_DIR/data/"
+}
+
 # 部署最小监控栈
 deploy_minimal() {
     log_step "部署最小监控栈..."
+
+    init_data_dirs
 
     cd "$DEPLOY_DIR"
     ${COMPOSE_CMD} -f docker-compose.yml up -d
@@ -278,6 +316,8 @@ deploy_minimal() {
 deploy_integration() {
     log_step "部署集成测试环境..."
 
+    init_data_dirs
+
     cd "$DEPLOY_DIR"
     ${COMPOSE_CMD} -f docker-compose-integration-test.yml up -d
 
@@ -290,6 +330,8 @@ deploy_integration() {
 # 部署完整轻量级栈
 deploy_full() {
     log_step "部署完整轻量级监控栈..."
+
+    init_data_dirs
 
     cd "$DEPLOY_DIR"
     ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d
@@ -455,16 +497,23 @@ clean_data() {
         exit 0
     fi
 
-    log_step "停止服务并清除数据卷..."
+    log_step "停止服务并清除数据..."
 
     cd "$DEPLOY_DIR"
 
-    # 停止并删除所有配置的数据卷
+    # 停止所有服务
     for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml; do
         if [ -f "$compose_file" ]; then
-            ${COMPOSE_CMD} -f "$compose_file" down -v 2>/dev/null || true
+            ${COMPOSE_CMD} -f "$compose_file" down 2>/dev/null || true
         fi
     done
+
+    # 删除数据目录
+    if [ -d "data" ]; then
+        log_info "删除数据目录..."
+        rm -rf data/
+        log_info "数据目录已删除"
+    fi
 
     log_info "所有服务已停止，数据卷已清除"
 }
@@ -481,6 +530,7 @@ ceph-exporter 部署脚本
   check           检查系统环境（Docker、资源、防火墙等）
   mirror          配置 Docker 镜像加速器
   pull            预拉取所有镜像
+  init            初始化数据目录（创建目录并设置权限）
   minimal         部署最小监控栈
   integration     部署集成测试环境
   full            部署完整轻量级栈（推荐）
@@ -488,7 +538,7 @@ ceph-exporter 部署脚本
   logs [service]  查看日志（可指定服务名）
   verify          验证部署状态
   stop            停止所有服务
-  clean           停止服务并清除数据卷
+  clean           停止服务并清除数据
   help            显示此帮助信息
 
 示例:
@@ -536,6 +586,9 @@ main() {
             check_docker
             check_docker_compose
             pull_images
+            ;;
+        init)
+            init_data_dirs
             ;;
         minimal)
             full_check

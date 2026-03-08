@@ -50,8 +50,19 @@ sudo systemctl restart docker
 ```bash
 cd /home/lfl/ceph-exporter/ceph-exporter/deployments
 chmod +x scripts/deploy.sh
+
+# 自动部署（会自动初始化数据目录）
 ./scripts/deploy.sh full
 ```
+
+**注意**: 部署脚本会自动创建 `./data/` 目录用于存储所有服务数据，包括：
+- Ceph 集群数据和配置
+- Prometheus 时序数据
+- Grafana 仪表板
+- Alertmanager 告警状态
+- Elasticsearch 索引数据
+
+数据存储在项目目录下，方便备份和管理。详见 [数据存储说明](ceph-exporter/deployments/DATA_STORAGE.md)。
 
 ## 步骤 5: 验证部署
 
@@ -89,8 +100,11 @@ curl http://localhost:3000
 # 停止服务
 ./scripts/deploy.sh stop
 
-# 清理数据
-./scripts/clean-volumes.sh
+# 清理数据（会删除 ./data/ 目录）
+./scripts/deploy.sh clean
+
+# 备份数据
+tar -czf backup-$(date +%Y%m%d).tar.gz data/
 ```
 
 ---

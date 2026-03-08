@@ -73,14 +73,27 @@ sudo systemctl stop firewalld
 ```bash
 cd /home/lfl/ceph-exporter/ceph-exporter/deployments
 chmod +x scripts/deploy.sh
+
+# 完整部署（自动初始化数据目录）
 ./scripts/deploy.sh full
 ```
+
+**数据存储说明**:
+- 所有服务数据存储在 `./data/` 目录下
+- 包括 Ceph、Prometheus、Grafana、Alertmanager、Elasticsearch 数据
+- 使用绑定挂载（bind mount）方式
+- 方便备份、迁移和管理
+- 详见 [数据存储文档](ceph-exporter/deployments/DATA_STORAGE.md)
 
 ### 方式 2: 手动部署
 
 ```bash
 cd /home/lfl/ceph-exporter/ceph-exporter/deployments
 
+# 1. 初始化数据目录（首次部署必需）
+./scripts/deploy.sh init
+
+# 2. 选择部署方式
 # 集成测试环境
 docker-compose -f docker-compose-integration-test.yml up -d
 
@@ -189,8 +202,34 @@ cd /home/lfl/ceph-exporter/ceph-exporter/deployments
 # 停止服务（保留数据）
 docker-compose down
 
-# 停止并删除数据
-docker-compose down -v
+# 停止并删除数据（删除 ./data/ 目录）
+./scripts/deploy.sh clean
+```
+
+### 数据备份
+
+```bash
+cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+
+# 备份所有数据
+tar -czf ceph-exporter-backup-$(date +%Y%m%d).tar.gz data/
+
+# 备份特定服务
+tar -czf prometheus-backup.tar.gz data/prometheus/
+tar -czf grafana-backup.tar.gz data/grafana/
+```
+
+### 数据恢复
+
+```bash
+# 停止服务
+docker-compose down
+
+# 恢复数据
+tar -xzf ceph-exporter-backup-20260308.tar.gz
+
+# 重启服务
+docker-compose up -d
 ```
 
 ### 完全清理
@@ -198,8 +237,10 @@ docker-compose down -v
 ```bash
 # 清理所有资源
 docker system prune -a
-docker volume prune
 docker network prune
+
+# 数据目录已在 ./data/ 下，可手动删除
+rm -rf data/
 ```
 
 ---
@@ -210,8 +251,9 @@ docker network prune
 - **QUICK_START.md** - 快速开始
 - **DOCKER_MIRROR_CONFIGURATION.md** - 镜像配置
 - **ceph-exporter/README.md** - 详细架构文档
+- **ceph-exporter/deployments/DATA_STORAGE.md** - 数据存储说明
 
 ---
 
-**版本**: 2.0
-**最后更新**: 2026-03-07
+**版本**: 2.1
+**最后更新**: 2026-03-08

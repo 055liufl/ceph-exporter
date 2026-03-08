@@ -177,12 +177,12 @@ services:
       # Ceph 数据卷 (测试专用)
       # 存储 OSD 数据、Mon 数据等
       # 测试完成后可以删除
-      - ceph-demo-data:/var/lib/ceph
+      - ./data/test/ceph-demo/data:/var/lib/ceph
 
       # Ceph 配置卷 (测试专用)
       # 存储配置文件和密钥
       # 需要共享给 ceph-exporter
-      - ceph-demo-config:/etc/ceph
+      - ./data/test/ceph-demo/config:/etc/ceph
 
     # -------------------------------------------------------------------------
     # 特权模式
@@ -255,7 +255,7 @@ services:
       # Ceph 配置目录 (只读)
       # 从 ceph-demo 容器共享
       # 包含 ceph.conf 和 keyring 文件
-      - ceph-demo-config:/etc/ceph:ro
+      - ./data/test/ceph-demo/config:/etc/ceph:ro
 
       # ceph-exporter 配置文件 (只读)
       # 测试配置文件
@@ -365,7 +365,7 @@ services:
 
       # Prometheus 数据卷 (测试专用)
       # 存储测试期间的时序数据
-      - prometheus-test-data:/prometheus
+      - ./data/test/prometheus:/prometheus
 
     # -------------------------------------------------------------------------
     # 启动命令
@@ -443,7 +443,7 @@ services:
     # -------------------------------------------------------------------------
     volumes:
       # Grafana 数据卷 (测试专用)
-      - grafana-test-data:/var/lib/grafana
+      - ./data/test/grafana:/var/lib/grafana
 
       # 数据源自动配置 (只读)
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
@@ -526,27 +526,37 @@ networks:
         - subnet: 172.20.0.0/16
 
 # =============================================================================
-# 数据卷配置区域
+# 数据存储说明
 # =============================================================================
-volumes:
-  # ---------------------------------------------------------------------------
-  # 测试环境数据卷
-  # ---------------------------------------------------------------------------
-  # 注意: 所有数据卷都是测试专用
-  # 测试完成后建议删除: docker-compose down -v
-  #
-  # ceph-demo-data: Ceph 测试数据
-  ceph-demo-data:
-
-  # ceph-demo-config: Ceph 测试配置
-  # 重要: 需要共享给 ceph-exporter
-  ceph-demo-config:
-
-  # prometheus-test-data: Prometheus 测试数据
-  prometheus-test-data:
-
-  # grafana-test-data: Grafana 测试数据
-  grafana-test-data:
+# 本项目使用绑定挂载 (bind mount) 方式存储数据
+#
+# 测试环境数据存储位置: ./data/test/ 目录
+#   - ./data/test/ceph-demo/data/    → Ceph 测试数据
+#   - ./data/test/ceph-demo/config/  → Ceph 测试配置
+#   - ./data/test/prometheus/        → Prometheus 测试数据
+#   - ./data/test/grafana/           → Grafana 测试数据
+#
+# 【优势】
+#   ✓ 测试数据与生产数据隔离
+#   ✓ 数据位置明确,易于查看和清理
+#   ✓ 测试完成后直接删除目录即可
+#
+# 【初始化】
+#   首次部署前需要初始化数据目录:
+#     ./scripts/deploy.sh init
+#   或在部署时自动初始化:
+#     ./scripts/deploy.sh integration
+#
+# 【清理测试数据】
+#   停止服务并删除测试数据:
+#     docker-compose -f docker-compose-integration-test.yml down
+#     rm -rf data/test/
+#
+# 【详细文档】
+#   查看完整的数据存储说明:
+#     cat DATA_STORAGE.md
+#
+# =============================================================================
 
 # =============================================================================
 # 配置文件结束

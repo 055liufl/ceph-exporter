@@ -338,11 +338,19 @@ services:
       #   - 性能指标异常
       - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
 
-      # Prometheus 数据存储卷
-      # 存储时序数据库文件
-      # 数据格式: 自定义的高效时序存储格式
+      # Prometheus 数据存储目录 (绑定挂载)
+      # 使用本地目录而非 Docker 命名卷
+      # 数据存储在: ./data/prometheus/
+      # 优势:
+      #   - 数据位置明确,易于查看和管理
+      #   - 备份简单: 直接复制目录
+      #   - 迁移方便: 复制到其他机器
+      # 存储内容:
+      #   - 时序数据库文件 (TSDB)
+      #   - WAL (Write-Ahead Log) 日志
+      #   - 索引文件
       # 注意: 数据量会随时间增长,需要监控磁盘使用
-      - prometheus_data:/prometheus
+      - ./data/prometheus:/prometheus
 
     # -------------------------------------------------------------------------
     # 启动命令配置
@@ -478,13 +486,17 @@ services:
     # 数据卷挂载
     # -------------------------------------------------------------------------
     volumes:
-      # Grafana 数据目录
+      # Grafana 数据目录 (绑定挂载)
+      # 使用本地目录而非 Docker 命名卷
+      # 数据存储在: ./data/grafana/
       # 存储内容:
       #   - SQLite 数据库 (用户、仪表板、配置等)
       #   - 插件数据
       #   - 会话数据
-      # 注意: 删除此卷会丢失所有仪表板和配置
-      - grafana_data:/var/lib/grafana
+      # 权限要求: 容器内使用 UID 472 运行
+      # 初始化: ./scripts/deploy.sh init 会自动设置权限
+      # 注意: 删除此目录会丢失所有仪表板和配置
+      - ./data/grafana:/var/lib/grafana
 
       # 数据源自动配置目录 (只读)
       # Provisioning: Grafana 的自动配置机制
@@ -646,13 +658,15 @@ services:
       #   - 按团队路由告警
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
 
-      # Alertmanager 数据目录
+      # Alertmanager 数据目录 (绑定挂载)
+      # 使用本地目录而非 Docker 命名卷
+      # 数据存储在: ./data/alertmanager/
       # 存储内容:
       #   - 静默配置 (Silences)
       #   - 通知状态 (Notification log)
       #   - 集群状态 (如果启用 HA 模式)
-      # 注意: 删除此卷会丢失所有静默配置
-      - alertmanager_data:/alertmanager
+      # 注意: 删除此目录会丢失所有静默配置
+      - ./data/alertmanager:/alertmanager
 
     # -------------------------------------------------------------------------
     # 启动命令配置
@@ -727,73 +741,49 @@ networks:
     driver: bridge
 
 # =============================================================================
-# 数据卷配置区域
+# 数据存储说明
 # =============================================================================
-volumes:
-  # ---------------------------------------------------------------------------
-  # prometheus_data: Prometheus 时序数据存储卷
-  # ---------------------------------------------------------------------------
-  # 存储内容:
-  #   - 时序数据库文件 (TSDB)
-  #   - WAL (Write-Ahead Log) 日志
-  #   - 索引文件
-  #
-  # 数据增长:
-  #   - 与抓取频率成正比
-  #   - 与指标数量成正比
-  #   - 受保留时间限制 (本配置为 30 天)
-  #
-  # 估算公式:
-  #   磁盘使用 ≈ 采样数 × 指标数 × 每个样本大小 (约 1-2 字节)
-  #   示例: 15秒采样, 1000个指标, 30天保留
-  #   = (86400/15) × 1000 × 30 × 2 字节 ≈ 345 MB
-  #
-  # 备份建议:
-  #   - 定期备份数据卷
-  #   - 或使用远程存储 (Thanos, Cortex)
-  prometheus_data:
-
-  # ---------------------------------------------------------------------------
-  # grafana_data: Grafana 数据存储卷
-  # ---------------------------------------------------------------------------
-  # 存储内容:
-  #   - SQLite 数据库 (grafana.db)
-  #     * 用户账号和权限
-  #     * 仪表板配置
-  #     * 数据源配置
-  #     * 告警规则
-  #   - 插件文件
-  #   - 会话数据
-  #
-  # 重要性:
-  #   ⚠ 包含所有自定义仪表板和配置
-  #   ⚠ 删除会导致所有配置丢失
-  #   ⚠ 建议定期备份
-  #
-  # 迁移:
-  #   - 可以导出仪表板 JSON
-  #   - 可以备份整个数据卷
-  #   - 可以使用 Grafana API 批量导出
-  grafana_data:
-
-  # ---------------------------------------------------------------------------
-  # alertmanager_data: Alertmanager 数据存储卷
-  # ---------------------------------------------------------------------------
-  # 存储内容:
-  #   - 静默配置 (Silences)
-  #     * 临时禁用特定告警
-  #     * 维护窗口期间使用
-  #   - 通知日志 (Notification log)
-  #     * 已发送的通知记录
-  #     * 用于去重和调试
-  #   - 集群状态 (HA 模式)
-  #     * 多实例同步数据
-  #
-  # 数据特性:
-  #   - 数据量较小 (通常 < 100MB)
-  #   - 主要是配置和状态信息
-  #   - 丢失后影响有限 (静默会失效)
-  alertmanager_data:
+# 本项目使用绑定挂载 (bind mount) 方式存储数据
+#
+# 数据存储位置: ./data/ 目录
+#   - ./data/prometheus/     → Prometheus 时序数据
+#   - ./data/grafana/        → Grafana 仪表板和配置
+#   - ./data/alertmanager/   → Alertmanager 告警状态
+#
+# 【优势】
+#   ✓ 数据位置明确,易于查看: ls -lh data/
+#   ✓ 备份简单: tar -czf backup.tar.gz data/
+#   ✓ 迁移方便: 直接复制 data/ 目录
+#   ✓ 权限控制: 使用文件系统权限
+#   ✓ 调试友好: 可直接查看和修改数据文件
+#
+# 【初始化】
+#   首次部署前需要初始化数据目录:
+#     ./scripts/deploy.sh init
+#   或在部署时自动初始化:
+#     ./scripts/deploy.sh full
+#
+# 【权限设置】
+#   - Grafana: 需要 UID 472 权限
+#     chown -R 472:472 data/grafana
+#   - Prometheus/Alertmanager: 使用当前用户权限
+#     chown -R $USER:$USER data/prometheus data/alertmanager
+#
+# 【备份和恢复】
+#   备份: tar -czf backup-$(date +%Y%m%d).tar.gz data/
+#   恢复: tar -xzf backup-20260308.tar.gz
+#
+# 【清理数据】
+#   停止服务并删除数据:
+#     ./scripts/deploy.sh clean
+#   或手动删除:
+#     docker-compose down && rm -rf data/
+#
+# 【详细文档】
+#   查看完整的数据存储说明:
+#     cat DATA_STORAGE.md
+#
+# =============================================================================
 
 # =============================================================================
 # 配置文件结束
@@ -831,8 +821,20 @@ volumes:
 # 查看 Grafana 数据源:
 #   curl -u admin:admin http://localhost:3000/api/datasources
 #
-# 备份数据卷:
-#   docker run --rm -v prometheus_data:/data -v $(pwd):/backup alpine tar czf /backup/prometheus-backup.tar.gz /data
+# 备份数据:
+#   tar -czf backup-$(date +%Y%m%d).tar.gz data/
+#
+# 恢复数据:
+#   docker-compose down
+#   tar -xzf backup-20260308.tar.gz
+#   docker-compose up -d
+#
+# 清理数据:
+#   ./scripts/deploy.sh clean
+#   或: docker-compose down && rm -rf data/
+#
+# 查看数据占用:
+#   du -sh data/*
 #
 # 【故障排查】
 #

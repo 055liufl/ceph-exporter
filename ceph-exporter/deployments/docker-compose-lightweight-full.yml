@@ -50,8 +50,8 @@ services:
         ipv4_address: 172.20.0.10
       monitor-network:
     volumes:
-      - ceph-demo-data:/var/lib/ceph
-      - ceph-demo-config:/etc/ceph
+      - ./data/ceph-demo/data:/var/lib/ceph
+      - ./data/ceph-demo/config:/etc/ceph
     privileged: true
     restart: unless-stopped
     mem_limit: 1024m
@@ -72,7 +72,7 @@ services:
       - ceph-network
       - monitor-network
     volumes:
-      - ceph-demo-config:/etc/ceph:ro
+      - ./data/ceph-demo/config:/etc/ceph:ro
       - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
     restart: unless-stopped
     depends_on:
@@ -92,7 +92,7 @@ services:
     networks:
       - monitor-network
     volumes:
-      - prometheus-data:/prometheus
+      - ./data/prometheus:/prometheus
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
     restart: unless-stopped
@@ -112,7 +112,7 @@ services:
     networks:
       - monitor-network
     volumes:
-      - grafana-data:/var/lib/grafana
+      - ./data/grafana:/var/lib/grafana
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -132,7 +132,7 @@ services:
     networks:
       - monitor-network
     volumes:
-      - alertmanager-data:/alertmanager
+      - ./data/alertmanager:/alertmanager
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     restart: unless-stopped
     mem_limit: 128m
@@ -154,7 +154,7 @@ services:
     networks:
       - logging-network
     volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
     restart: unless-stopped
     mem_limit: 512m
 
@@ -223,15 +223,3 @@ networks:
     driver: bridge
   tracing-network:
     driver: bridge
-
-# =============================================================================
-# Data Volumes
-# =============================================================================
-
-volumes:
-  ceph-demo-data:
-  ceph-demo-config:
-  prometheus-data:
-  grafana-data:
-  alertmanager-data:
-  elasticsearch-data:

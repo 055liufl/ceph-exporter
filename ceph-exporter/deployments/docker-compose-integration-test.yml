@@ -27,8 +27,8 @@ services:
       test-network:
         ipv4_address: 172.20.0.10
     volumes:
-      - ceph-demo-data:/var/lib/ceph
-      - ceph-demo-config:/etc/ceph
+      - ./data/test/ceph-demo/data:/var/lib/ceph
+      - ./data/test/ceph-demo/config:/etc/ceph
     privileged: true
     restart: unless-stopped
     mem_limit: 1024m
@@ -43,7 +43,7 @@ services:
     ports:
       - "9128:9128"
     volumes:
-      - ceph-demo-config:/etc/ceph:ro
+      - ./data/test/ceph-demo/config:/etc/ceph:ro
       - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
     environment:
       - CEPH_CONFIG=/etc/ceph/ceph.conf
@@ -71,7 +71,7 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-test-data:/prometheus
+      - ./data/test/prometheus:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -96,7 +96,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - grafana-test-data:/var/lib/grafana
+      - ./data/test/grafana:/var/lib/grafana
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -122,9 +122,3 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
-
-volumes:
-  ceph-demo-data:
-  ceph-demo-config:
-  prometheus-test-data:
-  grafana-test-data:
