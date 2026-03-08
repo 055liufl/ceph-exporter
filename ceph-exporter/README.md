@@ -10,7 +10,6 @@
 
 - 📖 [完整部署指南](../DEPLOYMENT_GUIDE.md) - 详细的部署步骤和配置说明
 - ⚡ [快速开始](../QUICK_START.md) - 5 分钟快速部署
-- 📚 [文档索引](../DOCUMENTATION_INDEX.md) - 所有文档导航
 
 **系统要求**: CentOS 7 + Docker
 

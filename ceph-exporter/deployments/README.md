@@ -106,7 +106,6 @@ docker-compose up -d
 如需完整的部署指南，请查看：
 
 - **[统一部署指南](../DEPLOYMENT_GUIDE.md)** - 完整的部署步骤和说明 ⭐
-- **[文档索引](../DOCUMENTATION_INDEX.md)** - 所有文档导航
 - **[镜像配置指南](../DOCKER_MIRROR_CONFIGURATION.md)** - Docker 镜像加速配置
 
 ---

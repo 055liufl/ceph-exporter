@@ -203,7 +203,6 @@ sudo systemctl restart docker
 
 - [完整部署指南](./DEPLOYMENT_GUIDE.md)
 - [快速开始](./QUICK_START.md)
-- [文档索引](./DOCUMENTATION_INDEX.md)
 
 ---
 
