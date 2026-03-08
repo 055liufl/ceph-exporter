@@ -22,7 +22,7 @@
 ### 方法 1: 使用部署脚本自动配置（推荐）
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd ceph-exporter/deployments
 ./scripts/deploy.sh mirror
 ```
 
@@ -118,7 +118,7 @@ docker pull jaegertracing/all-in-one:1.35
 或使用部署脚本自动拉取：
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd ceph-exporter/deployments
 ./scripts/deploy.sh pull
 ```
 

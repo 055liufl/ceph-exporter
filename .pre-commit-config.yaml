@@ -31,28 +31,28 @@ repos:
 
       - id: go-fmt
         name: go fmt
-        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && gofmt -s -w .'
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && gofmt -s -w $(find . -name "*.go" -not -path "./deployments/*")'
         language: system
         files: ^ceph-exporter/.*\.go$
         pass_filenames: false
 
       - id: goimports
         name: goimports
-        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && goimports -local ceph-exporter -w .'
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && goimports -local ceph-exporter -w $(find . -name "*.go" -not -path "./deployments/*")'
         language: system
         files: ^ceph-exporter/.*\.go$
         pass_filenames: false
 
       - id: go-vet
         name: go vet
-        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && go vet -tags nautilus ./...'
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && go vet -tags nautilus ./cmd/... ./internal/... ./test/...'
         language: system
         files: ^ceph-exporter/.*\.go$
         pass_filenames: false
 
       - id: golangci-lint
         name: golangci-lint
-        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && golangci-lint run --build-tags nautilus --config ../.golangci.yml --timeout 5m'
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && golangci-lint run --build-tags nautilus --config ../.golangci.yml --timeout 5m ./cmd/... ./internal/... ./test/...'
         language: system
         files: ^ceph-exporter/.*\.go$
         pass_filenames: false

@@ -48,7 +48,7 @@ sudo systemctl restart docker
 ## 步骤 4: 部署服务
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd ceph-exporter/deployments
 chmod +x scripts/deploy.sh
 
 # 自动部署（会自动初始化数据目录）
@@ -95,7 +95,16 @@ curl http://localhost:3000
 ./scripts/deploy.sh status
 
 # 查看日志
-./scripts/deploy.sh logs
+./scripts/deploy.sh logs [service-name]
+
+# 验证部署
+./scripts/deploy.sh verify
+
+# 诊断问题
+./scripts/deploy.sh diagnose
+
+# 修复部署问题
+sudo ./scripts/deploy.sh fix
 
 # 停止服务
 ./scripts/deploy.sh stop
@@ -148,4 +157,4 @@ docker info | grep -A 5 "Registry Mirrors"
 ---
 
 **版本**: 2.0
-**最后更新**: 2026-03-07
+**最后更新**: 2026-03-08

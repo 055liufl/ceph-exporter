@@ -5,6 +5,10 @@
 
 set -e
 
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
+
 echo "=========================================="
 echo "启动完整监控栈"
 echo "=========================================="
@@ -12,7 +16,7 @@ echo ""
 echo "Ceph Demo 已经在运行，现在启动其他服务"
 echo ""
 
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd "$DEPLOY_DIR"
 
 echo "步骤 1: 检查 Ceph Demo 状态..."
 docker ps --filter name=ceph-demo

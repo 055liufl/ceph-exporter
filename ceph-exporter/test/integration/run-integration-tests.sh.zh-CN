@@ -1,0 +1,352 @@
+#!/bin/bash
+# =============================================================================
+# 集成测试运行脚本 - 详细中文注释版本
+# =============================================================================
+# 功能说明：
+#   提供便捷的集成测试执行和环境管理功能
+#
+# 主要功能：
+#   1. 环境检查：检查 Docker、Docker Compose、Go 是否安装
+#   2. 环境设置：启动测试所需的 Docker 容器
+#   3. 运行测试：执行 Go 集成测试
+#   4. 环境清理：停止并删除测试容器
+#   5. 日志收集：保存容器日志用于调试
+#
+# 使用方式：
+#   ./run-integration-tests.sh          # 运行完整测试流程
+#   ./run-integration-tests.sh setup    # 仅设置测试环境
+#   ./run-integration-tests.sh test     # 仅运行测试（假设环境已启动）
+#   ./run-integration-tests.sh cleanup  # 仅清理测试环境
+#   ./run-integration-tests.sh logs     # 收集容器日志
+#   ./run-integration-tests.sh help     # 显示帮助信息
+#
+# 环境变量：
+#   SKIP_CLEANUP=1    # 测试后不清理环境（用于调试）
+#
+# 注意事项：
+#   - 需要 Docker、Docker Compose 和 Go 环境
+#   - 确保端口 9128、9090、3000、9093 未被占用
+#   - 测试需要 5-10 分钟完成
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Bash 严格模式设置
+# -----------------------------------------------------------------------------
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# 目录路径定义
+# -----------------------------------------------------------------------------
+# SCRIPT_DIR: 当前脚本所在目录的绝对路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# PROJECT_DIR: 项目根目录（test/integration 的上上级目录）
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
+# DEPLOY_DIR: 部署配置目录
+DEPLOY_DIR="${PROJECT_DIR}/deployments"
+
+# -----------------------------------------------------------------------------
+# 终端颜色定义
+# -----------------------------------------------------------------------------
+RED='\033[0;31m'      # 红色 - 错误信息
+GREEN='\033[0;32m'    # 绿色 - 成功信息
+YELLOW='\033[1;33m'   # 黄色 - 警告信息
+BLUE='\033[0;34m'     # 蓝色 - 步骤提示
+NC='\033[0m'          # 无颜色 - 重置
+
+# -----------------------------------------------------------------------------
+# 日志输出函数
+# -----------------------------------------------------------------------------
+
+# 输出信息日志（绿色）
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+# 输出警告日志（黄色）
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+# 输出错误日志（红色）
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# 输出步骤提示（蓝色）
+log_step() {
+    echo -e "${BLUE}[STEP]${NC} $1"
+}
+
+# -----------------------------------------------------------------------------
+# 环境检查函数
+# -----------------------------------------------------------------------------
+
+# 检查前置条件
+# 说明：
+#   - 检查所有必需的工具是否已安装
+#   - 设置全局变量 COMPOSE_CMD（docker-compose 或 docker compose）
+check_prerequisites() {
+    log_step "检查前置条件..."
+
+    # 检查 Docker
+    # command -v: 检查命令是否存在
+    # &> /dev/null: 重定向所有输出到 /dev/null（丢弃）
+    if ! command -v docker &> /dev/null; then
+        log_error "Docker 未安装"
+        exit 1
+    fi
+
+    # 检查 Docker Compose
+    # 支持两种版本：docker-compose（v1）和 docker compose（v2）
+    if command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
+    elif docker compose version &> /dev/null; then
+        COMPOSE_CMD="docker compose"
+    else
+        log_error "Docker Compose 未安装"
+        exit 1
+    fi
+
+    # 检查 Go
+    if ! command -v go &> /dev/null; then
+        log_error "Go 未安装"
+        exit 1
+    fi
+
+    # 显示版本信息
+    log_info "前置条件检查通过"
+    log_info "Docker: $(docker --version)"
+    # --short: 只显示版本号
+    # 2>/dev/null || echo 'unknown': 如果命令失败，显示 unknown
+    log_info "Docker Compose: $(${COMPOSE_CMD} version --short 2>/dev/null || echo 'unknown')"
+    log_info "Go: $(go version)"
+}
+
+# -----------------------------------------------------------------------------
+# 环境管理函数
+# -----------------------------------------------------------------------------
+
+# 设置测试环境
+# 说明：
+#   - 清理旧的测试环境
+#   - 启动 Docker Compose 服务
+#   - 等待服务完全启动
+setup_environment() {
+    log_step "设置测试环境..."
+
+    # 清理旧环境
+    log_info "清理旧的测试环境..."
+    # -v: 同时删除数据卷
+    # 2>/dev/null: 忽略错误输出（如果没有旧环境）
+    # || true: 即使失败也继续执行
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" down -v 2>/dev/null || true
+
+    # 启动服务
+    log_info "启动 Docker Compose 服务..."
+    # -d: 后台运行（detached mode）
+    # --build: 重新构建镜像（如果有变化）
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" up -d --build
+
+    # 等待服务启动
+    log_info "等待服务启动（45秒）..."
+    # 给服务足够的时间完全启动
+    sleep 45
+
+    # 检查服务状态
+    log_info "检查服务状态..."
+    # ps: 显示容器状态
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" ps
+
+    log_info "测试环境设置完成"
+}
+
+# -----------------------------------------------------------------------------
+# 测试执行函数
+# -----------------------------------------------------------------------------
+
+# 运行集成测试
+# 说明：
+#   - 切换到测试目录
+#   - 运行 Go 测试
+#   - 返回测试结果
+run_tests() {
+    log_step "运行集成测试..."
+
+    # 切换到测试目录
+    cd "${SCRIPT_DIR}"
+
+    # 运行测试
+    # -v: 详细输出（verbose）
+    # -timeout 30m: 设置超时时间为 30 分钟
+    if go test -v -timeout 30m; then
+        log_info "集成测试通过 ✓"
+        return 0
+    else
+        log_error "集成测试失败 ✗"
+        return 1
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# 清理函数
+# -----------------------------------------------------------------------------
+
+# 清理测试环境
+# 说明：
+#   - 停止所有测试容器
+#   - 删除容器和网络（但不删除数据卷）
+cleanup_environment() {
+    log_step "清理测试环境..."
+
+    # down: 停止并删除容器、网络
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" down
+
+    log_info "测试环境清理完成"
+}
+
+# -----------------------------------------------------------------------------
+# 日志收集函数
+# -----------------------------------------------------------------------------
+
+# 收集容器日志
+# 说明：
+#   - 将所有容器的日志保存到文件
+#   - 用于调试测试失败的原因
+collect_logs() {
+    log_step "收集容器日志..."
+
+    # 创建日志目录
+    local log_dir="${SCRIPT_DIR}/logs"
+    mkdir -p "${log_dir}"
+
+    # 生成带时间戳的日志文件名
+    # date +%Y%m%d_%H%M%S: 格式化日期时间（如 20240308_143025）
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local log_file="${log_dir}/integration-test-${timestamp}.log"
+
+    # 收集所有容器的日志
+    # >: 重定向输出到文件
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" logs > "${log_file}"
+
+    log_info "日志已保存到: ${log_file}"
+}
+
+# -----------------------------------------------------------------------------
+# 帮助信息函数
+# -----------------------------------------------------------------------------
+
+# 显示帮助信息
+show_help() {
+    cat << 'EOF'
+集成测试运行脚本
+
+使用方式:
+  ./run-integration-tests.sh [command]
+
+命令:
+  (无参数)    运行完整的集成测试流程（设置 -> 测试 -> 清理）
+  setup       仅设置测试环境
+  test        仅运行测试（假设环境已启动）
+  cleanup     仅清理测试环境
+  logs        收集容器日志
+  help        显示此帮助信息
+
+示例:
+  # 运行完整测试
+  ./run-integration-tests.sh
+
+  # 手动控制测试流程
+  ./run-integration-tests.sh setup
+  ./run-integration-tests.sh test
+  ./run-integration-tests.sh cleanup
+
+  # 收集日志
+  ./run-integration-tests.sh logs
+
+环境变量:
+  SKIP_CLEANUP=1    测试后不清理环境（用于调试）
+
+注意事项:
+  - 需要 Docker、Docker Compose 和 Go 环境
+  - 确保端口 9128、9090、3000、9093 未被占用
+  - 测试需要 5-10 分钟完成
+EOF
+}
+
+# -----------------------------------------------------------------------------
+# 主流程函数
+# -----------------------------------------------------------------------------
+
+# 主函数 - 根据命令参数执行相应操作
+# 参数：
+#   $1 - 命令名称（setup/test/cleanup/logs/help/all）
+main() {
+    # ${1:-all}: 如果没有参数，默认为 all
+    local command="${1:-all}"
+
+    # case 语句：根据命令执行不同操作
+    case "$command" in
+        setup)
+            # 仅设置环境
+            check_prerequisites
+            setup_environment
+            ;;
+        test)
+            # 仅运行测试
+            check_prerequisites
+            run_tests
+            ;;
+        cleanup)
+            # 仅清理环境
+            check_prerequisites
+            cleanup_environment
+            ;;
+        logs)
+            # 仅收集日志
+            check_prerequisites
+            collect_logs
+            ;;
+        help)
+            # 显示帮助
+            show_help
+            ;;
+        all|*)
+            # 运行完整流程（默认）
+            check_prerequisites
+
+            # 设置环境
+            setup_environment
+
+            # 运行测试
+            # local: 声明局部变量
+            local test_result=0
+            # || test_result=$?: 如果测试失败，保存退出码
+            run_tests || test_result=$?
+
+            # 收集日志（如果测试失败）
+            # -ne: 不等于（not equal）
+            if [ $test_result -ne 0 ]; then
+                log_warn "测试失败，收集日志..."
+                collect_logs
+            fi
+
+            # 清理环境（除非设置了 SKIP_CLEANUP）
+            # ${SKIP_CLEANUP:-0}: 如果未设置，默认为 0
+            if [ "${SKIP_CLEANUP:-0}" != "1" ]; then
+                cleanup_environment
+            else
+                log_warn "跳过环境清理（SKIP_CLEANUP=1）"
+            fi
+
+            # 返回测试结果
+            # exit: 退出脚本，返回状态码
+            exit $test_result
+            ;;
+    esac
+}
+
+# 执行主函数，传递所有命令行参数
+# "$@": 所有命令行参数
+main "$@"

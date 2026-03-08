@@ -20,7 +20,7 @@ URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED]>
 ### 方法 1: 使用自动修复脚本（推荐）
 
 ```bash
-cd /home/lfl/ceph-exporter
+cd <project-root>
 ./scripts/fix-precommit.sh
 ```
 

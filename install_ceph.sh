@@ -36,6 +36,6 @@ rpm -qa | grep -E "librados-devel|librbd-devel"
 
 echo ""
 echo "现在可以运行 pre-commit 检查:"
-echo "  cd /home/lfl/ceph-exporter"
+echo "  cd <project-root>"
 echo "  source ~/.bashrc"
 echo "  pre-commit run --all-files"

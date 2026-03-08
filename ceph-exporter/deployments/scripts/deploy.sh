@@ -286,11 +286,23 @@ init_data_dirs() {
             log_warn "无法设置 Elasticsearch 目录权限，可能需要手动设置"
         }
 
-        # 其他服务使用当前用户权限
-        sudo chown -R $USER:$USER data/prometheus data/alertmanager 2>/dev/null || true
-        sudo chown -R $USER:$USER data/test/prometheus 2>/dev/null || true
+        # Prometheus 需要 nobody 用户权限 (UID 65534)
+        sudo chown -R 65534:65534 data/prometheus data/test/prometheus 2>/dev/null || {
+            log_warn "无法设置 Prometheus 目录权限，可能需要手动设置"
+        }
+
+        # Alertmanager 使用当前用户权限
+        sudo chown -R $USER:$USER data/alertmanager 2>/dev/null || true
     else
         log_warn "未检测到 sudo，跳过权限设置"
+    fi
+
+    # 创建 configs 目录软链接（如果不存在）
+    if [ ! -e configs ]; then
+        log_info "创建 configs 目录软链接..."
+        ln -s ../configs configs 2>/dev/null || {
+            log_warn "无法创建 configs 软链接，请确保 ../configs 目录存在"
+        }
     fi
 
     log_info "数据目录初始化完成"
@@ -463,10 +475,20 @@ verify_deployment() {
         local endpoint="${service#*:}"
 
         log_info "检查 ${name}..."
-        if curl -sf "http://localhost:${endpoint}" > /dev/null 2>&1; then
-            echo -e "${GREEN}✓${NC} ${name} 运行正常"
+
+        # 特殊处理 ceph-demo：RGW 根路径返回 404 是正常的
+        if [ "$name" = "ceph-demo" ]; then
+            if curl -s "http://localhost:${endpoint}" 2>&1 | grep -q "NoSuchBucket\|InvalidBucketName\|404"; then
+                echo -e "${GREEN}✓${NC} ${name} 运行正常"
+            else
+                echo -e "${YELLOW}✗${NC} ${name} 无法访问或尚未就绪"
+            fi
         else
-            echo -e "${YELLOW}✗${NC} ${name} 无法访问或尚未就绪"
+            if curl -sf "http://localhost:${endpoint}" > /dev/null 2>&1; then
+                echo -e "${GREEN}✓${NC} ${name} 运行正常"
+            else
+                echo -e "${YELLOW}✗${NC} ${name} 无法访问或尚未就绪"
+            fi
         fi
     done
     echo ""
@@ -537,6 +559,8 @@ ceph-exporter 部署脚本
   status          查看服务状态
   logs [service]  查看日志（可指定服务名）
   verify          验证部署状态
+  diagnose [svc]  诊断服务问题（可指定服务名或 all）
+  fix             修复常见部署问题（权限、配置等）
   stop            停止所有服务
   clean           停止服务并清除数据
   help            显示此帮助信息
@@ -554,8 +578,23 @@ ceph-exporter 部署脚本
   # 查看特定服务日志
   ./deploy.sh logs ceph-exporter
 
+  # 完整诊断
+  ./deploy.sh diagnose
+
+  # 诊断特定服务
+  ./deploy.sh diagnose ceph-exporter
+
   # 验证部署
   ./deploy.sh verify
+
+  # 修复部署问题
+  ./deploy.sh fix
+
+故障排查:
+  如果遇到部署问题，请查看:
+  - 故障排查指南: cat ../TROUBLESHOOTING.md
+  - 运行修复脚本: ./deploy.sh fix
+  - 查看服务日志: ./deploy.sh logs <service-name>
 EOF
 }
 
@@ -621,6 +660,15 @@ main() {
             ;;
         verify)
             verify_deployment
+            ;;
+        diagnose)
+            shift
+            log_info "运行诊断脚本..."
+            exec "$SCRIPT_DIR/diagnose.sh" "$@"
+            ;;
+        fix)
+            log_info "运行修复脚本..."
+            exec "$SCRIPT_DIR/fix-deployment.sh"
             ;;
         stop)
             check_docker_compose

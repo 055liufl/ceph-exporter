@@ -50,7 +50,7 @@ CONF
 ### 3. 安装 Git Hooks
 
 ```bash
-cd /home/lfl/ceph-exporter
+cd <project-root>
 
 # 方式 1: 使用完整配置（推荐）
 pre-commit install

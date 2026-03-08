@@ -5,6 +5,10 @@
 
 set -e
 
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
+
 echo "=========================================="
 echo "使用 Ceph Demo 独立配置"
 echo "=========================================="
@@ -19,7 +23,7 @@ if [ "$confirm" != "yes" ]; then
     exit 0
 fi
 
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd "$DEPLOY_DIR"
 
 echo ""
 echo "步骤 1: 停止所有服务..."
@@ -67,6 +71,6 @@ echo "Ceph Demo 测试完成"
 echo "=========================================="
 echo ""
 echo "如果 Ceph 正常，请执行:"
-echo "  cd /home/lfl/ceph-exporter/ceph-exporter/deployments"
+echo "  cd <project>/ceph-exporter/deployments"
 echo "  sudo docker-compose -f docker-compose-lightweight-full.yml up -d"
 echo ""

@@ -180,13 +180,13 @@ services:
       - "5601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - NODE_OPTIONS=--max-old-space-size=384
+      - NODE_OPTIONS=--max-old-space-size=896
     networks:
       - logging-network
     restart: unless-stopped
     depends_on:
       - elasticsearch
-    mem_limit: 512m
+    mem_limit: 1024m
 
   # ===========================================================================
   # Tracing System (Jaeger)

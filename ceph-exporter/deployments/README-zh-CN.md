@@ -61,7 +61,10 @@ cat docker-compose-ceph-demo.yml.zh-CN
 ### 实际部署
 实际部署时使用原始配置文件:
 ```bash
-# 使用原始配置文件
+# 推荐：使用部署脚本（自动处理权限和配置）
+./scripts/deploy.sh full
+
+# 或手动使用原始配置文件
 docker-compose -f docker-compose-ceph-demo.yml up -d
 ```
 
@@ -71,6 +74,73 @@ docker-compose -f docker-compose-ceph-demo.yml up -d
 2. 理解配置项的作用和影响
 3. 在原始文件中进行修改
 4. 测试修改后的配置
+
+---
+
+## 🐛 常见部署问题
+
+### 1. Prometheus 权限错误
+
+**症状**: Prometheus 容器不断重启，日志显示 `permission denied`
+
+**原因**: Prometheus 以 UID 65534 (nobody) 运行，数据目录权限不正确
+
+**解决方案**:
+```bash
+# 使用部署脚本自动修复
+sudo ./scripts/deploy.sh init
+
+# 或手动修复
+sudo chown -R 65534:65534 data/prometheus
+docker-compose restart prometheus
+```
+
+### 2. Ceph-Exporter 配置文件找不到
+
+**症状**: ceph-exporter 日志显示配置文件不存在
+
+**原因**: deployments 目录下缺少 configs 软链接
+
+**解决方案**:
+```bash
+cd deployments
+ln -s ../configs configs
+docker-compose restart ceph-exporter
+```
+
+### 3. Ceph-Demo 验证失败
+
+**症状**: 验证脚本显示 ceph-demo 无法访问
+
+**说明**: RGW 根路径返回 HTTP 404 是正常的，不是错误
+
+**验证方法**:
+```bash
+# 检查容器状态
+docker ps | grep ceph-demo
+
+# 检查 Ceph 集群状态
+docker exec ceph-demo ceph -s
+
+# 测试 RGW 端口（返回 404 表示正常）
+curl -v http://localhost:8080
+```
+
+### 4. 首次部署最佳实践
+
+```bash
+# 1. 进入部署目录
+cd ceph-exporter/deployments
+
+# 2. 使用部署脚本（推荐，自动处理所有配置）
+sudo ./scripts/deploy.sh full
+
+# 3. 等待服务启动
+sleep 120
+
+# 4. 验证部署
+sudo ./scripts/deploy.sh verify
+```
 
 ## 📚 配置文件详细说明
 
@@ -320,12 +390,18 @@ echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 
 ## 📝 更新日志
 
-- **2026-03-07**: 创建所有配置文件的详细中文注释版本
+- **2026-03-08**:
+  - 创建所有配置文件的详细中文注释版本
   - 添加了 4 个 `.zh-CN` 文件
   - 每个配置项都有详细说明
   - 包含使用场景和最佳实践
   - 提供故障排查和优化建议
+  - 新增常见部署问题解决方案
+  - 修复 Prometheus 权限问题
+  - 修复 ceph-exporter 配置路径问题
+  - 修复 ceph-demo 验证逻辑
+- **2026-03-07**: 初始版本创建
 
 ---
 
-**注意:** 中文注释文件 (`.zh-CN`) 仅用于学习和参考,实际部署请使用原始配置文件。
+**注意:** 中文注释文件 (`.zh-CN`) 仅用于学习和参考,实际部署请使用原始配置文件或部署脚本。

@@ -71,7 +71,7 @@ sudo systemctl stop firewalld
 ### 方式 1: 自动部署（推荐）
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd ceph-exporter/deployments
 chmod +x scripts/deploy.sh
 
 # 完整部署（自动初始化数据目录）
@@ -88,7 +88,7 @@ chmod +x scripts/deploy.sh
 ### 方式 2: 手动部署
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd ceph-exporter/deployments
 
 # 1. 初始化数据目录（首次部署必需）
 ./scripts/deploy.sh init
@@ -197,7 +197,7 @@ sudo sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
 ### 停止服务
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd ceph-exporter/deployments
 
 # 停止服务（保留数据）
 docker-compose down
@@ -209,7 +209,7 @@ docker-compose down
 ### 数据备份
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd ceph-exporter/deployments
 
 # 备份所有数据
 tar -czf ceph-exporter-backup-$(date +%Y%m%d).tar.gz data/

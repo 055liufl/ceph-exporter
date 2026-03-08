@@ -1,6 +1,7 @@
 # 脚本文件详细说明 - 中文注释版本
 
 **创建日期**: 2026-03-07
+**最后更新**: 2026-03-08
 **用途**: 帮助理解所有部署和维护脚本的功能和用法
 
 ---
@@ -12,9 +13,10 @@
 | 脚本文件 | 中文注释版本 | 说明 |
 |---------|-------------|------|
 | deploy.sh | deploy.sh.zh-CN | 主部署脚本（最重要） |
-| clean-volumes.sh | clean-volumes.sh.zh-CN | 数据卷清理脚本 |
+| fix-deployment.sh | fix-deployment.sh.zh-CN | 部署问题修复脚本 ⭐ |
 | diagnose.sh | diagnose.sh.zh-CN | 诊断脚本 |
 | verify-deployment.sh | verify-deployment.sh.zh-CN | 部署验证脚本 |
+| clean-volumes.sh | clean-volumes.sh.zh-CN | 数据卷清理脚本 |
 | deploy-full-stack.sh | deploy-full-stack.sh.zh-CN | 完整栈部署脚本 |
 | test-ceph-demo.sh | test-ceph-demo.sh.zh-CN | Ceph Demo 测试脚本 |
 
@@ -24,6 +26,8 @@
 |---------|-------------|------|
 | scripts/fix-precommit.sh | scripts/fix-precommit.sh.zh-CN | Pre-commit 修复脚本 |
 | ceph-exporter/test/integration/run-integration-tests.sh | run-integration-tests.sh.zh-CN | 集成测试脚本 |
+| install_go.sh | install_go.sh.zh-CN | Go 环境安装脚本 |
+| install_ceph.sh | install_ceph.sh.zh-CN | Ceph 开发库安装脚本 |
 
 ---
 
@@ -139,7 +143,154 @@
 
 ---
 
-### 2. clean-volumes.sh - 数据卷清理脚本 ⭐⭐
+### 2. fix-deployment.sh - 部署问题修复脚本 ⭐⭐⭐
+
+**重要程度**: ⭐⭐⭐ 非常重要
+
+**功能**:
+- 自动修复常见的部署问题
+- 修复目录权限问题
+- 修复系统配置问题
+- 重启失败的服务
+
+**主要修复内容**:
+
+#### 2.1 权限修复
+```bash
+# Prometheus 数据目录权限
+- 目标权限: 65534:65534 (nobody 用户)
+- 修复目录: data/prometheus
+- 常见错误: "permission denied" 导致 Prometheus 不断重启
+
+# Grafana 数据目录权限
+- 目标权限: 472:472 (Grafana 容器用户)
+- 修复目录: data/grafana
+- 常见错误: 无法保存仪表板和配置
+
+# Elasticsearch 数据目录权限
+- 目标权限: 1000:1000 (Elasticsearch 容器用户)
+- 修复目录: data/elasticsearch
+- 常见错误: 无法启动，数据目录访问被拒绝
+```
+
+#### 2.2 配置修复
+```bash
+# configs 目录软链接
+- 检查并创建 configs -> ../configs 软链接
+- 解决配置文件找不到的问题
+
+# Ceph keyring 文件权限
+- 修改为 644 权限，允许容器读取
+- 修复文件:
+  - ceph.client.admin.keyring
+  - ceph.mon.keyring
+```
+
+#### 2.3 系统参数修复
+```bash
+# vm.max_map_count 设置
+- 当前值检查: sysctl -n vm.max_map_count
+- 需要值: 262144
+- 作用: Elasticsearch 需要较大的虚拟内存映射区域
+- 修复方式:
+  - 临时: sysctl -w vm.max_map_count=262144
+  - 永久: 写入 /etc/sysctl.conf
+```
+
+#### 2.4 服务重启
+```bash
+# 检测并重启失败的服务
+- 检查 Prometheus 状态（Restarting）
+- 检查 ceph-exporter 状态（Restarting）
+- 自动重启失败的服务
+```
+
+**使用方法**:
+```bash
+# 必须使用 root 权限运行
+sudo ./scripts/fix-deployment.sh
+
+# 或通过 deploy.sh 调用
+./scripts/deploy.sh fix
+```
+
+**使用场景**:
+1. **首次部署失败** - 权限问题导致服务无法启动
+2. **Prometheus 不断重启** - 数据目录权限不正确
+3. **Grafana 无法保存配置** - 目录权限问题
+4. **Elasticsearch 启动失败** - vm.max_map_count 太小
+5. **ceph-exporter 无法连接** - keyring 文件权限问题
+6. **配置文件找不到** - configs 软链接缺失
+
+**执行流程**:
+```bash
+步骤 1: 检查 root 权限
+步骤 2: 修复 Prometheus 权限 (65534:65534)
+步骤 3: 修复 Grafana 权限 (472:472)
+步骤 4: 修复 Elasticsearch 权限 (1000:1000)
+步骤 5: 检查/创建 configs 软链接
+步骤 6: 修复 Ceph keyring 权限 (644)
+步骤 7: 检查/设置 vm.max_map_count (262144)
+步骤 8: 重启失败的服务
+步骤 9: 等待 30 秒让服务启动
+步骤 10: 显示服务状态
+```
+
+**注意事项**:
+- ⚠️ 必须使用 `sudo` 运行
+- ⚠️ 会修改系统参数（vm.max_map_count）
+- ⚠️ 会重启失败的服务
+- ✅ 不会删除任何数据
+- ✅ 可以重复运行，不会造成问题
+
+**常见问题解决**:
+
+**问题 1: Prometheus 不断重启**
+```bash
+# 症状
+docker ps  # 显示 prometheus 状态为 Restarting
+
+# 原因
+数据目录权限不正确，Prometheus 以 UID 65534 运行
+
+# 解决
+sudo ./scripts/fix-deployment.sh
+# 或
+sudo chown -R 65534:65534 data/prometheus
+docker-compose restart prometheus
+```
+
+**问题 2: Elasticsearch 无法启动**
+```bash
+# 症状
+docker logs elasticsearch  # 显示 vm.max_map_count 错误
+
+# 原因
+系统默认值 65530 太小，Elasticsearch 需要至少 262144
+
+# 解决
+sudo ./scripts/fix-deployment.sh
+# 或
+sudo sysctl -w vm.max_map_count=262144
+```
+
+**问题 3: ceph-exporter 无法读取 keyring**
+```bash
+# 症状
+docker logs ceph-exporter  # 显示 permission denied
+
+# 原因
+keyring 文件权限过于严格（600），容器无法读取
+
+# 解决
+sudo ./scripts/fix-deployment.sh
+# 或
+sudo chmod 644 data/ceph-demo/config/*.keyring
+```
+
+---
+
+### 3. clean-volumes.sh - 数据卷清理脚本 ⭐⭐
 
 **重要程度**: ⭐⭐ 重要
 
@@ -195,7 +346,7 @@ rm -rf data/ceph-demo/*
 
 ---
 
-### 3. diagnose.sh - 诊断脚本 ⭐⭐
+### 4. diagnose.sh - 诊断脚本 ⭐⭐
 
 **重要程度**: ⭐⭐ 重要
 
@@ -250,7 +401,7 @@ rm -rf data/ceph-demo/*
 
 ---
 
-### 4. verify-deployment.sh - 部署验证脚本 ⭐
+### 5. verify-deployment.sh - 部署验证脚本 ⭐
 
 **重要程度**: ⭐ 常用
 
@@ -280,7 +431,7 @@ rm -rf data/ceph-demo/*
 
 ---
 
-### 5. deploy-full-stack.sh - 完整栈部署脚本 ⭐
+### 6. deploy-full-stack.sh - 完整栈部署脚本 ⭐
 
 **重要程度**: ⭐ 辅助脚本
 
@@ -305,7 +456,7 @@ deploy-full-stack.sh:
 
 ---
 
-### 6. test-ceph-demo.sh - Ceph Demo 测试脚本 ⭐
+### 7. test-ceph-demo.sh - Ceph Demo 测试脚本 ⭐
 
 **重要程度**: ⭐ 测试工具
 

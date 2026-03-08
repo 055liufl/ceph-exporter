@@ -227,7 +227,7 @@ scrape_interval: 60s  # 改为 60 秒
 ## 🔧 配置文件位置
 
 ```
-/home/lfl/ceph-exporter/
+<project-root>/
 ├── ceph-exporter/
 │   ├── configs/
 │   │   └── ceph-exporter.yaml          # ceph-exporter 配置
