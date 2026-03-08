@@ -19,10 +19,10 @@ BUILD_TIME  := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Go 编译参数
-# CGO_ENABLED=0: 不依赖 CGO，纯 Go 编译（Ceph 连接通过 build tag 提供 stub）
+# CGO_ENABLED=1: 启用 CGO 以支持 Ceph C 库绑定
 GO          := go
 GOFLAGS     := -v
-CGO_ENABLED := 0
+CGO_ENABLED := 1
 LDFLAGS     := -ldflags "-X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X main.gitCommit=$(GIT_COMMIT)"
 
 # 目录

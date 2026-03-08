@@ -93,6 +93,8 @@ services:
       - monitor-network
     volumes:
       - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
     restart: unless-stopped
     depends_on:
       - ceph-exporter
@@ -111,6 +113,9 @@ services:
       - monitor-network
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -128,6 +133,7 @@ services:
       - monitor-network
     volumes:
       - alertmanager-data:/alertmanager
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     restart: unless-stopped
     mem_limit: 128m
 

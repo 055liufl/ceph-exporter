@@ -49,24 +49,65 @@ alerting:
         - targets:
             # Alertmanager address (using Docker service name resolution)
             - "alertmanager:9093"
+      # Send alert timeout
+      timeout: 10s
 
 # -----------------------------------------------------------------------------
 # Scrape Configurations
 # -----------------------------------------------------------------------------
 # Define which targets Prometheus should scrape metrics from
 scrape_configs:
+  # ---------------------------------------------------------------------------
   # Prometheus self-monitoring
+  # ---------------------------------------------------------------------------
+  # Collect Prometheus's own runtime metrics (memory, CPU, scrape latency, etc.)
+  # Used to monitor Prometheus itself
   - job_name: "prometheus"
+
+    scrape_interval: 15s
+
     static_configs:
       - targets:
           - "localhost:9090"
+        labels:
+          service: "prometheus"
 
+  # ---------------------------------------------------------------------------
   # Ceph Exporter monitoring
+  # ---------------------------------------------------------------------------
+  # Collect Ceph cluster monitoring metrics from ceph-exporter
+  # Includes: cluster capacity, OSD status, pool statistics, Monitor status, health checks, etc.
   - job_name: "ceph-exporter"
+
+    # Scrape interval (override global default, Ceph metrics change slowly, 15s is sufficient)
+    scrape_interval: 15s
+
+    # Scrape timeout (Ceph commands may be slow, allow sufficient time)
+    scrape_timeout: 10s
+
+    # Metrics path (default /metrics)
+    metrics_path: /metrics
+
+    # Static target configuration
     static_configs:
       - targets:
+          # ceph-exporter service address (Docker service name:port)
           - "ceph-exporter:9128"
-    # Scrape interval for this job (override global setting if needed)
-    scrape_interval: 15s
-    # Scrape timeout for this job
-    scrape_timeout: 10s
+        # Additional labels (used for filtering and grouping in Grafana)
+        labels:
+          service: "ceph-exporter"
+          component: "ceph"
+
+  # ---------------------------------------------------------------------------
+  # Alertmanager monitoring
+  # ---------------------------------------------------------------------------
+  # Collect Alertmanager runtime metrics
+  - job_name: "alertmanager"
+
+    scrape_interval: 30s
+
+    static_configs:
+      - targets:
+          - "alertmanager:9093"
+        labels:
+          service: "alertmanager"

@@ -1,6 +1,6 @@
 # ceph-exporter
 
-基于 Go 语言开发的 Ceph 集群 Prometheus 指标导出器。通过接口抽象与 Ceph 集群通信，采集集群状态、存储池、OSD、Monitor 等核心指标，并以 Prometheus 标准格式暴露。项目不依赖 CGO，可在任意平台纯 Go 编译。
+基于 Go 语言开发的 Ceph 集群 Prometheus 指标导出器。通过接口抽象与 Ceph 集群通信，采集集群状态、存储池、OSD、Monitor 等核心指标，并以 Prometheus 标准格式暴露。项目启用 CGO，使用 go-ceph 库与 Ceph 集群通信。
 
 ---
 
@@ -115,7 +115,7 @@ ceph-exporter/
 │   │                                   #   - 组件标签和追踪 ID 验证
 │   │
 │   ├── ceph/
-│   │   ├── client.go                   # Ceph 客户端（纯 Go，不依赖 CGO）
+│   │   ├── client.go                   # Ceph 客户端（使用 CGO 和 go-ceph 库）
 │   │   │                               #   - radosConn 接口抽象
 │   │   │                               #   - Connect()/Close()/Reconnect() 生命周期管理
 │   │   │                               #   - ExecuteCommand() 带超时的命令执行
@@ -128,11 +128,8 @@ ceph-exporter/
 │   │   │                               #   - HealthCheck() 健康检查
 │   │   ├── conn_cgo.go                 # RADOS 连接 - CGO 实现（build tag: cgo）
 │   │   │                               #   - 使用 go-ceph/rados 库连接真实 Ceph 集群
-│   │   │                               #   - 仅在 CGO_ENABLED=1 时编译
-│   │   ├── conn_nocgo.go               # RADOS 连接 - 纯 Go stub（build tag: !cgo）
-│   │   │                               #   - CGO_ENABLED=0 时的占位实现
-│   │   │                               #   - 保证纯 Go 环境下编译和测试通过
-│   │   └── client_test.go              # Ceph 客户端测试（纯 Go，不依赖 CGO）
+│   │   │                               #   - 在 CGO_ENABLED=1 时编译
+│   │   └── client_test.go              # Ceph 客户端测试（使用 CGO）
 │   │                                   #   - JSON 反序列化验证
 │   │                                   #   - 客户端状态管理验证
 │   │                                   #   - 命令 JSON 构建验证
@@ -209,13 +206,13 @@ ceph-exporter/
 │                                       #   - 重复加载检测
 │                                       #   - 管理器关闭验证
 │
-├── Dockerfile                          # 多阶段 Docker 构建（纯 Go，不依赖 CGO）
-│                                       #   - builder 阶段: golang:alpine + CGO_ENABLED=0
+├── Dockerfile                          # 多阶段 Docker 构建（启用 CGO）
+│                                       #   - builder 阶段: golang:alpine + CGO_ENABLED=1
 │                                       #   - runtime 阶段: alpine 最小化镜像
 │                                       #   - 非 root 用户运行
 │                                       #   - 健康检查配置
 │
-├── Makefile                            # 构建与开发命令（CGO_ENABLED=0）
+├── Makefile                            # 构建与开发命令（CGO_ENABLED=1）
 │                                       #   - go build:         编译二进制文件
 │                                       #   - go test:          运行单元测试
 │                                       #   - go test -cover:   测试覆盖率报告
@@ -230,7 +227,7 @@ ceph-exporter/
 │                                       #   - github.com/sirupsen/logrus v1.9.3
 │                                       #   - gopkg.in/natefinch/lumberjack.v2 v2.2.1
 │                                       #   - gopkg.in/yaml.v3 v3.0.1
-│                                       #   CGO 可选依赖（仅 CGO_ENABLED=1 时使用）:
+│                                       #   CGO 依赖（CGO_ENABLED=1 时使用）:
 │                                       #   - github.com/ceph/go-ceph v0.27.0
 │
 └── README.md                           # 本文件
@@ -238,9 +235,8 @@ ceph-exporter/
 
 ## CGO 与 Build Tag 说明
 
-本项目通过 Go build tag 隔离 CGO 依赖，实现跨平台编译:
+本项目启用 CGO 以支持 Ceph C 库绑定:
 
-- `CGO_ENABLED=0`（默认）: 使用 `conn_nocgo.go` 中的 stub 实现，纯 Go 编译，适用于开发、测试和 CI 环境
 - `CGO_ENABLED=1`: 使用 `conn_cgo.go` 中的 go-ceph/rados 真实实现，需要安装 Ceph 开发库，适用于生产环境
 
 ## 开发阶段规划
@@ -265,7 +261,7 @@ ceph-exporter/
 go version
 ```
 
-不需要安装任何 C 库。项目默认以 `CGO_ENABLED=0` 编译和测试。
+需要安装 Ceph 开发库。项目以 `CGO_ENABLED=1` 编译和测试。
 
 ### 2. 依赖安装
 
@@ -300,8 +296,8 @@ Pre-commit 会运行：trailing-whitespace、end-of-file-fixer、check-yaml、go
 ### 4. 单元测试
 
 ```bash
-# 运行全部单元测试（不依赖 CGO）
-CGO_ENABLED=0 go test -v -count=1 ./internal/...
+# 运行全部单元测试（使用 CGO）
+CGO_ENABLED=1 go test -v -count=1 ./internal/...
 ```
 
 **预期结果：** 以下测试包全部通过（PASS）
@@ -320,7 +316,7 @@ CGO_ENABLED=0 go test -v -count=1 ./internal/...
 
 ```bash
 mkdir -p build
-CGO_ENABLED=0 go test -v -coverprofile=build/coverage.out -covermode=atomic ./internal/...
+CGO_ENABLED=1 go test -v -coverprofile=build/coverage.out -covermode=atomic ./internal/...
 go tool cover -html=build/coverage.out -o build/coverage.html
 # 覆盖率报告生成在 build/coverage.html
 ```
@@ -336,9 +332,9 @@ go vet ./...
 ### 7. 编译验证
 
 ```bash
-# 编译二进制文件（纯 Go，不依赖 CGO）
+# 编译二进制文件（启用 CGO）
 mkdir -p build
-CGO_ENABLED=0 go build -v -ldflags "-X main.version=dev -X main.buildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.gitCommit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" -o build/ceph-exporter ./cmd/ceph-exporter
+CGO_ENABLED=1 go build -v -ldflags "-X main.version=dev -X main.buildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.gitCommit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" -o build/ceph-exporter ./cmd/ceph-exporter
 
 # 验证版本信息
 ./build/ceph-exporter -version
@@ -353,7 +349,7 @@ CGO_ENABLED=0 go build -v -ldflags "-X main.version=dev -X main.buildTime=$(date
 本项目运行在 CentOS 7 + Docker 环境中。
 
 ```bash
-# 构建镜像（纯 Go 编译，基于 alpine）
+# 构建镜像（启用 CGO，基于 alpine）
 docker build -t ceph-exporter:dev .
 
 # 验证镜像
@@ -378,7 +374,7 @@ docker run --rm ceph-exporter:dev -version
 ```bash
 # 先编译（如果还没编译过）
 mkdir -p build
-CGO_ENABLED=0 go build -v -o build/ceph-exporter ./cmd/ceph-exporter
+CGO_ENABLED=1 go build -v -o build/ceph-exporter ./cmd/ceph-exporter
 
 # 使用默认配置启动
 ./build/ceph-exporter -config configs/ceph-exporter.yaml
@@ -412,15 +408,15 @@ curl http://localhost:9128/metrics
 
 - [ ] `go mod tidy` 无报错，依赖完整
 - [ ] `go vet ./...` 无警告
-- [ ] `CGO_ENABLED=0 go test ./internal/...` 全部通过
-- [ ] `CGO_ENABLED=0 go build ./cmd/ceph-exporter` 编译成功
+- [ ] `CGO_ENABLED=1 go test ./internal/...` 全部通过
+- [ ] `CGO_ENABLED=1 go build ./cmd/ceph-exporter` 编译成功
 - [ ] `-version` 参数正确输出版本信息
 - [ ] 配置文件包含所有必要配置段且有合理默认值
 - [ ] 日志系统支持 text/json 格式、文件轮转
 - [ ] HTTP 服务器提供 /metrics、/health、/ready 端点
-- [ ] Ceph 客户端通过 build tag 隔离 CGO 依赖
+- [ ] Ceph 客户端使用 CGO 和 go-ceph 库
 - [ ] 采集器、追踪、插件模块有占位实现且不影响编译
-- [ ] Dockerfile 使用 CGO_ENABLED=0 纯 Go 编译
+- [ ] Dockerfile 使用 CGO_ENABLED=1 编译
 - [ ] Makefile 提供 build/test/lint/docker/clean 目标
 
 ### 12. Phase 2 验收清单
@@ -439,7 +435,7 @@ curl http://localhost:9128/metrics
 - [ ] Ceph Client 提供完整的数据获取方法（GetClusterStatus, GetPoolStats, GetOSDStats, GetMonitorStats, GetMDSStats, GetRGWStats）
 - [ ] 每个 Collect() 使用 `newCollectContext()` 创建带 10s 超时的上下文
 - [ ] 采集失败时记录错误日志但不 panic，不影响其他采集器
-- [ ] `CGO_ENABLED=0 go build ./cmd/ceph-exporter` 编译成功
+- [ ] `CGO_ENABLED=1 go build ./cmd/ceph-exporter` 编译成功
 - [ ] `go vet ./...` 无警告
 
 ### 13. Phase 3 验收清单（单元测试）
@@ -447,7 +443,7 @@ curl http://localhost:9128/metrics
 **测试文件完整性：**
 
 - [ ] 8 个测试文件存在：collector_test.go, cluster_test.go, pool_test.go, osd_test.go, monitor_test.go, health_test.go, mds_test.go, rgw_test.go
-- [ ] `CGO_ENABLED=0 go test -v -count=1 ./internal/collector/...` 全部通过
+- [ ] `CGO_ENABLED=1 go test -v -count=1 ./internal/collector/...` 全部通过
 
 **公共基础设施测试（collector_test.go）：**
 
@@ -514,7 +510,7 @@ curl http://localhost:9128/metrics
 - [ ] `cd test/integration && go test -v -timeout 30m` 全部通过
 - [ ] 或使用 `make test-integration` 运行测试
 - [ ] 或使用 `./test/integration/run-integration-tests.sh` 运行测试
-- [ ] 所有测试在 `CGO_ENABLED=0` 下通过，不依赖 CGO
+- [ ] 所有测试在 `CGO_ENABLED=1` 下通过，使用 CGO
 
 **CentOS 7 + Docker 环境：**
 
@@ -746,8 +742,8 @@ ceph-exporter/
 ### Phase 1-5 完整验收
 
 ```bash
-# 1. 编译项目（纯 Go，不依赖 CGO）
-CGO_ENABLED=0 go build -o ceph-exporter ./cmd/ceph-exporter
+# 1. 编译项目（启用 CGO）
+CGO_ENABLED=1 go build -o ceph-exporter ./cmd/ceph-exporter
 
 # 2. 运行所有单元测试
 go test -v ./internal/...
@@ -818,7 +814,7 @@ gosec ./...
 ### 核心功能
 
 - ✅ 7 个 Prometheus 采集器（Cluster、Pool、OSD、Monitor、Health、MDS、RGW）
-- ✅ 纯 Go 实现，不依赖 CGO
+- ✅ 使用 CGO 和 go-ceph 库
 - ✅ 完整的配置管理系统
 - ✅ 结构化日志系统
 - ✅ OpenTelemetry 追踪集成

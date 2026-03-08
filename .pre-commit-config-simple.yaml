@@ -30,7 +30,7 @@ repos:
 
       - id: go-test
         name: go test
-        entry: bash -c 'cd ceph-exporter && CGO_ENABLED=0 go test -v -count=1 ./internal/...'
+        entry: bash -c 'cd ceph-exporter && CGO_ENABLED=1 go test -v -count=1 ./internal/...'
         language: system
         pass_filenames: false
         always_run: false

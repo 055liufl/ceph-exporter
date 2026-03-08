@@ -138,14 +138,14 @@ ceph-exporter/
 
 ```bash
 cd ceph-exporter
-CGO_ENABLED=0 go build -o build/ceph-exporter ./cmd/ceph-exporter
+CGO_ENABLED=1 go build -o build/ceph-exporter ./cmd/ceph-exporter
 ```
 
 ### 运行测试
 
 ```bash
 # 单元测试
-CGO_ENABLED=0 go test -v ./internal/...
+CGO_ENABLED=1 go test -v ./internal/...
 
 # 测试覆盖率
 go test -coverprofile=coverage.out ./internal/...
@@ -225,7 +225,7 @@ sudo firewall-cmd --reload
 ## 📚 核心特性
 
 - ✅ 7 个 Prometheus 采集器（Cluster、Pool、OSD、Monitor、Health、MDS、RGW）
-- ✅ 纯 Go 实现，不依赖 CGO
+- ✅ 使用 CGO 和 go-ceph 库
 - ✅ 完整的单元测试（81 个测试用例，100% 通过率）
 - ✅ 测试覆盖率 68.1%，核心模块 >90%
 - ✅ Docker 容器化部署

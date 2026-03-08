@@ -6,13 +6,13 @@
 #   2. runtime 阶段: 使用 alpine 运行时镜像，安装 Ceph 运行时库
 #
 # 构建命令:
-#   docker build -t ceph-exporter:latest .
+#   docker build -t ceph-exporter:dev .
 #
 # 运行命令:
 #   docker run -d \
 #     -p 9128:9128 \
 #     -v /etc/ceph:/etc/ceph:ro \
-#     ceph-exporter:latest
+#     ceph-exporter:dev
 # =============================================================================
 
 # ---------------------------------------------------------------------------
