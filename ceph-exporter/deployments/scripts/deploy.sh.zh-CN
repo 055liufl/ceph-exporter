@@ -493,6 +493,10 @@ pull_images() {
 deploy_minimal() {
     log_step "部署最小监控栈..."
 
+    # 初始化数据目录
+    # 说明：创建必要的数据目录并设置正确的权限
+    init_data_dirs
+
     # 切换到部署目录
     cd "$DEPLOY_DIR"
 
@@ -518,12 +522,64 @@ deploy_minimal() {
 deploy_integration() {
     log_step "部署集成测试环境..."
 
+    # 初始化数据目录
+    # 说明：创建必要的数据目录并设置正确的权限
+    init_data_dirs
+
     cd "$DEPLOY_DIR"
     ${COMPOSE_CMD} -f docker-compose-integration-test.yml up -d
 
     log_info "等待服务启动（Ceph Demo 需要约 90 秒初始化）..."
     # Ceph Demo 需要更长时间初始化
     sleep 90
+
+    # -----------------------------------------------------------------------------
+    # 修复 Ceph keyring 文件权限
+    # -----------------------------------------------------------------------------
+    # 问题说明：
+    #   - Ceph Demo 容器创建的 keyring 文件默认权限为 600（-rw-------）
+    #   - 这意味着只有文件所有者（UID 167，ceph-demo 容器用户）可以读写
+    #   - ceph-exporter 容器以不同的用户运行，无法读取这些文件
+    #   - 导致错误：rados: ret=-13, Permission denied
+    #
+    # 解决方案：
+    #   - 将 keyring 文件权限修改为 644（-rw-r--r--）
+    #   - 644 权限：所有者可读写，组和其他人可读
+    #   - 这允许 ceph-exporter 容器读取 keyring 文件连接到 Ceph 集群
+    #
+    # 安全性说明：
+    #   - 在 Docker 容器环境中，这是安全的做法
+    #   - 容器之间通过 Docker 网络隔离
+    #   - keyring 文件仍然在宿主机的受保护目录中
+    #   - 只有有权访问 Docker 的用户才能读取这些文件
+    log_info "修复 Ceph keyring 文件权限..."
+
+    # 修复 admin keyring（管理员密钥）
+    if [ -f "data/ceph-demo/config/ceph.client.admin.keyring" ]; then
+        chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
+        log_info "✓ ceph.client.admin.keyring 权限已修复 (644)"
+    fi
+
+    # 修复 mon keyring（Monitor 密钥）
+    if [ -f "data/ceph-demo/config/ceph.mon.keyring" ]; then
+        chmod 644 data/ceph-demo/config/ceph.mon.keyring
+        log_info "✓ ceph.mon.keyring 权限已修复 (644)"
+    fi
+
+    # 重启 ceph-exporter 以应用权限修复
+    # 说明：
+    #   - 权限修复后需要重启 ceph-exporter 才能生效
+    #   - 使用 restart 而不是 stop/start 可以保持容器配置
+    #   - restart 会优雅地停止容器并重新启动
+    log_info "重启 ceph-exporter 服务..."
+    ${COMPOSE_CMD} -f docker-compose-integration-test.yml restart ceph-exporter
+
+    # 等待 ceph-exporter 重启完成
+    # 说明：
+    #   - ceph-exporter 需要几秒钟连接到 Ceph 集群
+    #   - 等待 10 秒确保服务完全启动
+    log_info "等待 ceph-exporter 启动..."
+    sleep 10
 
     show_access_info_integration
 }
@@ -536,12 +592,35 @@ deploy_integration() {
 deploy_full() {
     log_step "部署完整轻量级监控栈..."
 
+    # 初始化数据目录
+    # 说明：创建必要的数据目录并设置正确的权限
+    init_data_dirs
+
     cd "$DEPLOY_DIR"
     ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d
 
     log_info "等待所有服务启动（这可能需要几分钟）..."
     # 完整栈包含更多服务，需要更长启动时间
     sleep 120
+
+    # 修复 Ceph keyring 文件权限（同上）
+    log_info "修复 Ceph keyring 文件权限..."
+    if [ -f "data/ceph-demo/config/ceph.client.admin.keyring" ]; then
+        chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
+        log_info "✓ ceph.client.admin.keyring 权限已修复 (644)"
+    fi
+    if [ -f "data/ceph-demo/config/ceph.mon.keyring" ]; then
+        chmod 644 data/ceph-demo/config/ceph.mon.keyring
+        log_info "✓ ceph.mon.keyring 权限已修复 (644)"
+    fi
+
+    # 重启 ceph-exporter 以应用权限修复
+    log_info "重启 ceph-exporter 服务..."
+    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml restart ceph-exporter
+
+    # 等待 ceph-exporter 重启完成
+    log_info "等待 ceph-exporter 启动..."
+    sleep 10
 
     show_access_info_full
 }

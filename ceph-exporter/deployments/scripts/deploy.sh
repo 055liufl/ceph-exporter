@@ -336,6 +336,26 @@ deploy_integration() {
     log_info "等待服务启动..."
     sleep 90
 
+    # 修复 Ceph keyring 文件权限
+    # 说明：集成测试环境也包含 Ceph Demo，需要修复 keyring 权限
+    log_info "修复 Ceph keyring 文件权限..."
+    if [ -f "data/ceph-demo/config/ceph.client.admin.keyring" ]; then
+        chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
+        log_info "✓ ceph.client.admin.keyring 权限已修复"
+    fi
+    if [ -f "data/ceph-demo/config/ceph.mon.keyring" ]; then
+        chmod 644 data/ceph-demo/config/ceph.mon.keyring
+        log_info "✓ ceph.mon.keyring 权限已修复"
+    fi
+
+    # 重启 ceph-exporter 以应用权限修复
+    log_info "重启 ceph-exporter 服务..."
+    ${COMPOSE_CMD} -f docker-compose-integration-test.yml restart ceph-exporter
+
+    # 等待 ceph-exporter 重启完成
+    log_info "等待 ceph-exporter 启动..."
+    sleep 10
+
     show_access_info_integration
 }
 
@@ -350,6 +370,33 @@ deploy_full() {
 
     log_info "等待所有服务启动（这可能需要几分钟）..."
     sleep 120
+
+    # 修复 Ceph keyring 文件权限
+    # 说明：
+    #   - Ceph Demo 容器创建的 keyring 文件默认权限为 600（只有所有者可读写）
+    #   - ceph-exporter 容器需要读取这些文件才能连接到 Ceph 集群
+    #   - 将权限修改为 644（所有者可读写，其他人可读）允许容器间共享
+    #   - 这是 Docker 环境中的常见做法，不会影响安全性
+    log_info "修复 Ceph keyring 文件权限..."
+    if [ -f "data/ceph-demo/config/ceph.client.admin.keyring" ]; then
+        chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
+        log_info "✓ ceph.client.admin.keyring 权限已修复"
+    fi
+    if [ -f "data/ceph-demo/config/ceph.mon.keyring" ]; then
+        chmod 644 data/ceph-demo/config/ceph.mon.keyring
+        log_info "✓ ceph.mon.keyring 权限已修复"
+    fi
+
+    # 重启 ceph-exporter 以应用权限修复
+    # 说明：
+    #   - 权限修复后需要重启 ceph-exporter 才能生效
+    #   - 使用 restart 而不是 stop/start 可以保持容器配置
+    log_info "重启 ceph-exporter 服务..."
+    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml restart ceph-exporter
+
+    # 等待 ceph-exporter 重启完成
+    log_info "等待 ceph-exporter 启动..."
+    sleep 10
 
     show_access_info_full
 }
