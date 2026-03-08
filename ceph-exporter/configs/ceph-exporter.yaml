@@ -1,0 +1,79 @@
+# =============================================================================
+# ceph-exporter Configuration File
+# =============================================================================
+# This file defines all configuration options for ceph-exporter.
+# All configuration options can be overridden by corresponding environment variables.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# HTTP Server Configuration
+# Controls the HTTP service behavior exposed by ceph-exporter
+# -----------------------------------------------------------------------------
+server:
+  host: "0.0.0.0"              # Listen address, default listens on all interfaces
+  port: 9128                    # Listen port, port for Prometheus to pull metrics
+  read_timeout: 30s             # HTTP read timeout
+  write_timeout: 30s            # HTTP write timeout
+  tls_cert_file: ""             # TLS certificate file path (leave empty to disable HTTPS)
+  tls_key_file: ""              # TLS key file path (leave empty to disable HTTPS)
+
+# -----------------------------------------------------------------------------
+# Ceph Cluster Connection Configuration
+# Defines how to connect to the Ceph cluster
+# Environment variable overrides: CEPH_CONFIG, CEPH_USER, CEPH_KEYRING, CEPH_CLUSTER
+# -----------------------------------------------------------------------------
+ceph:
+  config_file: "/etc/ceph/ceph.conf"                  # Ceph configuration file path
+  user: "admin"                                        # Ceph authentication username
+  keyring: "/etc/ceph/ceph.client.admin.keyring"       # Keyring authentication file path
+  cluster: "ceph"                                      # Ceph cluster name
+  timeout: 10s                                         # Command execution timeout
+
+# -----------------------------------------------------------------------------
+# Prometheus Collection Configuration
+# Controls metric collection frequency and timeout
+# -----------------------------------------------------------------------------
+prometheus:
+  collect_interval: 15s         # Metric collection interval
+  timeout: 10s                  # Single collection timeout
+
+# -----------------------------------------------------------------------------
+# Logger Configuration
+# Supports multiple levels, multiple output targets, log rotation
+# Environment variable overrides: LOG_LEVEL, LOG_FORMAT, LOGSTASH_URL
+# -----------------------------------------------------------------------------
+logger:
+  level: "info"                 # Log level: trace, debug, info, warn, error, fatal, panic
+  format: "json"                # Log format: json (structured), text (plain text)
+  output: "stdout"              # Output target: stdout (standard output), stderr (standard error), file (file)
+  file_path: "/var/log/ceph-exporter/ceph-exporter.log"  # Log file path (effective when output=file)
+  max_size: 100                 # Maximum size of a single log file (MB)
+  max_backups: 3                # Number of old log files to retain
+  max_age: 28                   # Maximum days to retain log files
+  compress: true                # Whether to compress archived old log files
+  enable_elk: false             # Whether to enable ELK log integration (Phase 3 implementation)
+  logstash_url: "logstash:5044" # Logstash address (effective when enable_elk=true)
+
+# -----------------------------------------------------------------------------
+# Tracer Configuration (Phase 3 implementation, only configuration structure defined here)
+# Implements distributed tracing using OpenTelemetry + Jaeger
+# Environment variable overrides: JAEGER_URL, SERVICE_NAME
+# -----------------------------------------------------------------------------
+tracer:
+  enabled: false                                    # Whether to enable tracing (Phase 1 default disabled)
+  jaeger_url: "http://jaeger:14268/api/traces"      # Jaeger Collector URL
+  service_name: "ceph-exporter"                     # Service name
+  sample_rate: 1.0                                  # Sampling rate (0.0-1.0)
+
+# -----------------------------------------------------------------------------
+# Plugin Configuration (Phase 5 implementation, only configuration structure defined here)
+# Supports monitoring data collection from third-party storage systems
+# -----------------------------------------------------------------------------
+plugins:
+  - name: "example-storage"
+    enabled: false
+    type: "http"
+    path: "http://example-storage:8080"
+    config:
+      endpoint: "http://example-storage:8080"
+      timeout: "10s"

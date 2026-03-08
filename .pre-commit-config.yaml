@@ -1,0 +1,72 @@
+# 简化版 pre-commit 配置（Windows 兼容）
+# 适配项目结构：Go 代码在 ceph-exporter 子目录中
+
+repos:
+  # 通用钩子
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0  # v4.x 支持 Python 3.8+, v5.0.0+ 需要 Python 3.9+
+    hooks:
+      - id: trailing-whitespace
+        args: ['--markdown-linebreak-ext=md']
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--allow-multiple-documents']
+        exclude: '\.zh-CN\.(yaml|yml)$'
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: check-case-conflict
+
+  # 本地 Go 工具（避免 Windows 兼容性问题）
+  # 注意: 需要先安装 Go 和相关工具才能使用这些检查
+  # 如果没有安装 Go,可以注释掉下面的 hooks
+  - repo: local
+    hooks:
+      # 取消注释以下 hooks 需要先安装:
+      # - Go: https://go.dev/dl/
+      # - goimports: go install golang.org/x/tools/cmd/goimports@latest
+      # - golangci-lint: https://golangci-lint.run/usage/install/
+
+      - id: go-fmt
+        name: go fmt
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && gofmt -s -w .'
+        language: system
+        files: ^ceph-exporter/.*\.go$
+        pass_filenames: false
+
+      - id: goimports
+        name: goimports
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && goimports -local ceph-exporter -w .'
+        language: system
+        files: ^ceph-exporter/.*\.go$
+        pass_filenames: false
+
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && go vet -tags nautilus ./...'
+        language: system
+        files: ^ceph-exporter/.*\.go$
+        pass_filenames: false
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && golangci-lint run --build-tags nautilus --config ../.golangci.yml --timeout 5m'
+        language: system
+        files: ^ceph-exporter/.*\.go$
+        pass_filenames: false
+
+# 全局设置
+exclude: |
+  (?x)^(
+    vendor/|
+    .*\.pb\.go$|
+    .*_generated\.go$|
+    build/|
+    .git/|
+    .*\.exe$|
+    .*\.zh-CN\.(yaml|yml)$|
+    ceph_exporter/|
+    pre-commit/
+  )$

@@ -1,0 +1,289 @@
+# =============================================================================
+# Prometheus 告警规则 - Ceph 集群监控
+# =============================================================================
+# 本文件定义了 Ceph 集群的告警规则，覆盖以下场景:
+#
+# 1. 集群健康状态告警
+#    - 集群处于 HEALTH_WARN 状态
+#    - 集群处于 HEALTH_ERR 状态（紧急）
+#
+# 2. OSD 告警
+#    - OSD 节点宕机
+#    - OSD 节点被踢出集群
+#    - OSD 使用率过高
+#    - OSD 延迟过高
+#
+# 3. 容量告警
+#    - 集群容量使用率 > 75%（警告）
+#    - 集群容量使用率 > 85%（严重）
+#    - 集群容量使用率 > 95%（紧急）
+#
+# 4. PG 告警
+#    - 存在非 active+clean 状态的 PG
+#
+# 5. Monitor 告警
+#    - Monitor 节点不在 quorum 中
+#    - Monitor 时钟偏差过大
+#
+# 6. 服务可用性告警
+#    - ceph-exporter 服务不可用
+#
+# 告警严重级别:
+#   - warning:  警告级别，需要关注但不紧急
+#   - critical: 严重级别，需要尽快处理
+#   - emergency: 紧急级别，需要立即处理
+# =============================================================================
+
+groups:
+  # ===========================================================================
+  # 集群健康状态告警组
+  # ===========================================================================
+  - name: ceph_cluster_health
+    # 规则评估间隔（使用全局默认值 15s）
+    rules:
+
+      # -----------------------------------------------------------------------
+      # 集群处于 HEALTH_WARN 状态
+      # -----------------------------------------------------------------------
+      # 当 ceph_health_status == 1 时触发（0=OK, 1=WARN, 2=ERR）
+      # 持续 5 分钟才触发告警，避免短暂波动产生噪音
+      - alert: CephClusterWarning
+        expr: ceph_health_status == 1
+        for: 5m
+        labels:
+          severity: warning
+          component: cluster
+        annotations:
+          summary: "Ceph 集群处于 HEALTH_WARN 状态"
+          description: "Ceph 集群健康状态为 HEALTH_WARN，已持续超过 5 分钟。请检查集群状态: ceph health detail"
+
+      # -----------------------------------------------------------------------
+      # 集群处于 HEALTH_ERR 状态（紧急）
+      # -----------------------------------------------------------------------
+      # 当 ceph_health_status == 2 时触发
+      # 仅需持续 1 分钟即触发，因为 ERR 状态通常意味着数据可能受损
+      - alert: CephClusterError
+        expr: ceph_health_status == 2
+        for: 1m
+        labels:
+          severity: critical
+          component: cluster
+        annotations:
+          summary: "Ceph 集群处于 HEALTH_ERR 状态"
+          description: "Ceph 集群健康状态为 HEALTH_ERR，已持续超过 1 分钟。可能存在数据丢失风险，请立即检查: ceph health detail"
+
+  # ===========================================================================
+  # OSD 告警组
+  # ===========================================================================
+  - name: ceph_osd_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # OSD 节点宕机
+      # -----------------------------------------------------------------------
+      # 当 OSD 的 up 状态为 0 时触发
+      - alert: CephOSDDown
+        expr: ceph_osd_up == 0
+        for: 3m
+        labels:
+          severity: warning
+          component: osd
+        annotations:
+          summary: "OSD {{ $labels.osd }} 已宕机"
+          description: "OSD {{ $labels.osd }} 处于 down 状态已超过 3 分钟。请检查该 OSD 所在节点的状态。"
+
+      # -----------------------------------------------------------------------
+      # OSD 节点被踢出集群
+      # -----------------------------------------------------------------------
+      # 当 OSD 的 in 状态为 0 时触发（OSD 被标记为 out）
+      - alert: CephOSDOut
+        expr: ceph_osd_in == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: osd
+        annotations:
+          summary: "OSD {{ $labels.osd }} 已被踢出集群"
+          description: "OSD {{ $labels.osd }} 处于 out 状态已超过 5 分钟。数据正在重新平衡，请检查该 OSD。"
+
+      # -----------------------------------------------------------------------
+      # OSD 使用率过高（> 85%）
+      # -----------------------------------------------------------------------
+      - alert: CephOSDHighUtilization
+        expr: ceph_osd_utilization > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: osd
+        annotations:
+          summary: "OSD {{ $labels.osd }} 使用率过高: {{ $value | printf \"%.1f\" }}%"
+          description: "OSD {{ $labels.osd }} 的磁盘使用率已超过 85%，持续 10 分钟。请考虑扩容或数据重平衡。"
+
+      # -----------------------------------------------------------------------
+      # OSD 延迟过高（apply latency > 500ms）
+      # -----------------------------------------------------------------------
+      - alert: CephOSDHighLatency
+        expr: ceph_osd_apply_latency_ms > 500
+        for: 5m
+        labels:
+          severity: warning
+          component: osd
+        annotations:
+          summary: "OSD {{ $labels.osd }} 写入延迟过高: {{ $value | printf \"%.0f\" }}ms"
+          description: "OSD {{ $labels.osd }} 的 apply latency 超过 500ms，持续 5 分钟。可能存在磁盘性能问题。"
+
+      # -----------------------------------------------------------------------
+      # 多个 OSD 同时宕机（> 10% 的 OSD down）
+      # -----------------------------------------------------------------------
+      - alert: CephMultipleOSDDown
+        expr: (ceph_cluster_osds_total - ceph_cluster_osds_up) / ceph_cluster_osds_total > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          component: osd
+        annotations:
+          summary: "超过 10% 的 OSD 宕机"
+          description: "集群中有 {{ $value | printf \"%.0f\" }}% 的 OSD 处于 down 状态。总 OSD 数: {{ with query \"ceph_cluster_osds_total\" }}{{ . | first | value }}{{ end }}，Up 数: {{ with query \"ceph_cluster_osds_up\" }}{{ . | first | value }}{{ end }}"
+
+  # ===========================================================================
+  # 容量告警组
+  # ===========================================================================
+  - name: ceph_capacity_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # 集群容量使用率 > 75%（警告）
+      # -----------------------------------------------------------------------
+      - alert: CephClusterCapacityWarning
+        expr: (ceph_cluster_used_bytes / ceph_cluster_total_bytes) * 100 > 75
+        for: 10m
+        labels:
+          severity: warning
+          component: capacity
+        annotations:
+          summary: "Ceph 集群容量使用率超过 75%"
+          description: "集群容量使用率: {{ $value | printf \"%.1f\" }}%。总容量: {{ with query \"ceph_cluster_total_bytes\" }}{{ . | first | value | humanize1024 }}B{{ end }}，已用: {{ with query \"ceph_cluster_used_bytes\" }}{{ . | first | value | humanize1024 }}B{{ end }}"
+
+      # -----------------------------------------------------------------------
+      # 集群容量使用率 > 85%（严重）
+      # -----------------------------------------------------------------------
+      - alert: CephClusterCapacityCritical
+        expr: (ceph_cluster_used_bytes / ceph_cluster_total_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: critical
+          component: capacity
+        annotations:
+          summary: "Ceph 集群容量使用率超过 85%"
+          description: "集群容量使用率: {{ $value | printf \"%.1f\" }}%。请尽快扩容，避免集群进入 NEARFULL 状态。"
+
+      # -----------------------------------------------------------------------
+      # 集群容量使用率 > 95%（紧急）
+      # -----------------------------------------------------------------------
+      - alert: CephClusterCapacityEmergency
+        expr: (ceph_cluster_used_bytes / ceph_cluster_total_bytes) * 100 > 95
+        for: 1m
+        labels:
+          severity: emergency
+          component: capacity
+        annotations:
+          summary: "Ceph 集群容量即将耗尽"
+          description: "集群容量使用率: {{ $value | printf \"%.1f\" }}%。集群可能即将停止写入，请立即扩容或清理数据！"
+
+  # ===========================================================================
+  # PG 告警组
+  # ===========================================================================
+  - name: ceph_pg_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # 存在非 active+clean 状态的 PG
+      # -----------------------------------------------------------------------
+      # 正常情况下所有 PG 应处于 active+clean 状态
+      # 其他状态（如 degraded, recovering, backfilling）表示数据不完整或正在恢复
+      - alert: CephPGNotClean
+        expr: ceph_cluster_pgs_by_state{state!="active+clean"} > 0
+        for: 15m
+        labels:
+          severity: warning
+          component: pg
+        annotations:
+          summary: "存在非 active+clean 状态的 PG"
+          description: "有 {{ $value }} 个 PG 处于 {{ $labels.state }} 状态，已持续 15 分钟。请检查: ceph pg stat"
+
+      # -----------------------------------------------------------------------
+      # PG 总数为 0（集群可能异常）
+      # -----------------------------------------------------------------------
+      - alert: CephNoPGs
+        expr: ceph_cluster_pgs_total == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: pg
+        annotations:
+          summary: "Ceph 集群 PG 总数为 0"
+          description: "集群中没有任何 Placement Group，这通常意味着集群配置异常或所有存储池已被删除。"
+
+  # ===========================================================================
+  # Monitor 告警组
+  # ===========================================================================
+  - name: ceph_monitor_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Monitor 不在 quorum 中
+      # -----------------------------------------------------------------------
+      - alert: CephMonitorOutOfQuorum
+        expr: ceph_monitor_in_quorum == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: monitor
+        annotations:
+          summary: "Monitor {{ $labels.monitor }} 不在 quorum 中"
+          description: "Monitor {{ $labels.monitor }} 已脱离 quorum 超过 2 分钟。如果多数 Monitor 脱离 quorum，集群将无法正常工作。"
+
+      # -----------------------------------------------------------------------
+      # Monitor 时钟偏差过大（> 0.5 秒）
+      # -----------------------------------------------------------------------
+      - alert: CephMonitorClockSkew
+        expr: abs(ceph_monitor_clock_skew_sec) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: monitor
+        annotations:
+          summary: "Monitor {{ $labels.monitor }} 时钟偏差过大: {{ $value | printf \"%.3f\" }}s"
+          description: "Monitor {{ $labels.monitor }} 的时钟偏差超过 0.5 秒。请检查 NTP 同步状态。"
+
+  # ===========================================================================
+  # 服务可用性告警组
+  # ===========================================================================
+  - name: ceph_exporter_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # ceph-exporter 服务不可用
+      # -----------------------------------------------------------------------
+      - alert: CephExporterDown
+        expr: up{job="ceph-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: exporter
+        annotations:
+          summary: "ceph-exporter 服务不可用"
+          description: "Prometheus 无法从 ceph-exporter 采集指标，已持续 2 分钟。请检查 ceph-exporter 容器状态。"
+
+      # -----------------------------------------------------------------------
+      # ceph-exporter 采集延迟过高（> 10 秒）
+      # -----------------------------------------------------------------------
+      - alert: CephExporterSlowScrape
+        expr: scrape_duration_seconds{job="ceph-exporter"} > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: exporter
+        annotations:
+          summary: "ceph-exporter 采集延迟过高: {{ $value | printf \"%.1f\" }}s"
+          description: "ceph-exporter 的指标采集耗时超过 10 秒，持续 5 分钟。可能是 Ceph 集群响应缓慢或网络问题。"

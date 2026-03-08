@@ -1,0 +1,72 @@
+# =============================================================================
+# Prometheus Configuration File
+# =============================================================================
+# This file defines Prometheus global configuration, alert rules,
+# alertmanager, and scrape targets.
+#
+# Architecture:
+#   Prometheus periodically pulls metric data from ceph-exporter's /metrics endpoint,
+#   evaluates alert conditions based on rules defined in alert_rules.yml,
+#   and sends triggered alerts to Alertmanager for grouping and notification.
+#
+# Scrape Targets:
+#   - ceph-exporter:9128/metrics  Ceph cluster metrics
+#   - localhost:9090/metrics      Prometheus self metrics
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Global Configuration
+# -----------------------------------------------------------------------------
+global:
+  # Default scrape interval (pull metrics from targets every 15 seconds)
+  scrape_interval: 15s
+
+  # Default scrape timeout (maximum wait time for a single scrape)
+  scrape_timeout: 10s
+
+  # Alert rule evaluation interval (evaluate alert conditions every 15 seconds)
+  evaluation_interval: 15s
+
+  # External labels (attached to all time series data and alerts, used to distinguish different Prometheus instances)
+  external_labels:
+    cluster: "ceph-monitor"          # Monitoring cluster identifier
+    environment: "production"        # Environment identifier
+
+# -----------------------------------------------------------------------------
+# Alert Rule Files
+# -----------------------------------------------------------------------------
+# Prometheus will load alert rules defined in the following files and evaluate them periodically according to evaluation_interval
+rule_files:
+  - "/etc/prometheus/alert_rules.yml"
+
+# -----------------------------------------------------------------------------
+# Alertmanager Configuration
+# -----------------------------------------------------------------------------
+# Define which Alertmanager instances Prometheus should send alerts to
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            # Alertmanager address (using Docker service name resolution)
+            - "alertmanager:9093"
+
+# -----------------------------------------------------------------------------
+# Scrape Configurations
+# -----------------------------------------------------------------------------
+# Define which targets Prometheus should scrape metrics from
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets:
+          - "localhost:9090"
+
+  # Ceph Exporter monitoring
+  - job_name: "ceph-exporter"
+    static_configs:
+      - targets:
+          - "ceph-exporter:9128"
+    # Scrape interval for this job (override global setting if needed)
+    scrape_interval: 15s
+    # Scrape timeout for this job
+    scrape_timeout: 10s

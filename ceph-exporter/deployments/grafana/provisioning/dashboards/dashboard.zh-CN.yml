@@ -1,0 +1,24 @@
+# =============================================================================
+# Grafana 仪表盘自动配置（Provisioning）
+# =============================================================================
+# 本文件定义 Grafana 启动时自动加载的仪表盘目录。
+# Grafana 会扫描指定目录中的 JSON 文件，自动导入为仪表盘。
+#
+# 文档: https://grafana.com/docs/grafana/latest/administration/provisioning/
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  # Ceph 监控仪表盘提供者
+  - name: "Ceph Dashboards"            # 提供者名称
+    orgId: 1                            # 组织 ID（默认组织）
+    folder: "Ceph"                      # 仪表盘存放的文件夹名称
+    type: file                          # 类型: 从文件加载
+    disableDeletion: false              # 允许在 Web UI 中删除
+    editable: true                      # 允许在 Web UI 中编辑
+    updateIntervalSeconds: 30           # 文件变更检查间隔（秒）
+    allowUiUpdates: true                # 允许通过 UI 更新
+    options:
+      path: /var/lib/grafana/dashboards # 仪表盘 JSON 文件目录（容器内路径）
+      foldersFromFilesStructure: false  # 不根据文件目录结构创建文件夹

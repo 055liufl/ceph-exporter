@@ -1,0 +1,79 @@
+# =============================================================================
+# ceph-exporter 配置文件
+# =============================================================================
+# 本文件定义了 ceph-exporter 的所有配置项。
+# 所有配置项均可通过对应的环境变量进行覆盖。
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# HTTP 服务器配置
+# 控制 ceph-exporter 对外暴露的 HTTP 服务行为
+# -----------------------------------------------------------------------------
+server:
+  host: "0.0.0.0"              # 监听地址，默认监听所有网卡
+  port: 9128                    # 监听端口，Prometheus 拉取指标的端口
+  read_timeout: 30s             # HTTP 读取超时时间
+  write_timeout: 30s            # HTTP 写入超时时间
+  tls_cert_file: ""             # TLS 证书文件路径（留空则不启用 HTTPS）
+  tls_key_file: ""              # TLS 密钥文件路径（留空则不启用 HTTPS）
+
+# -----------------------------------------------------------------------------
+# Ceph 集群连接配置
+# 定义如何连接到 Ceph 集群
+# 环境变量覆盖: CEPH_CONFIG, CEPH_USER, CEPH_KEYRING, CEPH_CLUSTER
+# -----------------------------------------------------------------------------
+ceph:
+  config_file: "/etc/ceph/ceph.conf"                  # Ceph 配置文件路径
+  user: "admin"                                        # Ceph 认证用户名
+  keyring: "/etc/ceph/ceph.client.admin.keyring"       # Keyring 认证文件路径
+  cluster: "ceph"                                      # Ceph 集群名称
+  timeout: 10s                                         # 命令执行超时时间
+
+# -----------------------------------------------------------------------------
+# Prometheus 采集配置
+# 控制指标采集的频率和超时
+# -----------------------------------------------------------------------------
+prometheus:
+  collect_interval: 15s         # 指标采集间隔
+  timeout: 10s                  # 单次采集超时时间
+
+# -----------------------------------------------------------------------------
+# 日志配置
+# 支持多级别、多输出目标、日志轮转
+# 环境变量覆盖: LOG_LEVEL, LOG_FORMAT, LOGSTASH_URL
+# -----------------------------------------------------------------------------
+logger:
+  level: "info"                 # 日志级别: trace, debug, info, warn, error, fatal, panic
+  format: "json"                # 日志格式: json（结构化）, text（文本）
+  output: "stdout"              # 输出目标: stdout（标准输出）, stderr（标准错误）, file（文件）
+  file_path: "/var/log/ceph-exporter/ceph-exporter.log"  # 日志文件路径（output=file 时生效）
+  max_size: 100                 # 单个日志文件最大大小（MB）
+  max_backups: 3                # 保留的旧日志文件数量
+  max_age: 28                   # 保留日志文件的最大天数
+  compress: true                # 是否压缩归档的旧日志文件
+  enable_elk: false             # 是否启用 ELK 日志集成（Phase 3 实现）
+  logstash_url: "logstash:5044" # Logstash 地址（enable_elk=true 时生效）
+
+# -----------------------------------------------------------------------------
+# 追踪配置（Phase 3 实现，此处仅定义配置结构）
+# 使用 OpenTelemetry + Jaeger 实现分布式追踪
+# 环境变量覆盖: JAEGER_URL, SERVICE_NAME
+# -----------------------------------------------------------------------------
+tracer:
+  enabled: false                                    # 是否启用追踪（Phase 1 默认关闭）
+  jaeger_url: "http://jaeger:14268/api/traces"      # Jaeger Collector URL
+  service_name: "ceph-exporter"                     # 服务名称
+  sample_rate: 1.0                                  # 采样率 (0.0-1.0)
+
+# -----------------------------------------------------------------------------
+# 插件配置（Phase 5 实现，此处仅定义配置结构）
+# 支持第三方存储系统监控数据采集
+# -----------------------------------------------------------------------------
+plugins:
+  - name: "example-storage"
+    enabled: false
+    type: "http"
+    path: "http://example-storage:8080"
+    config:
+      endpoint: "http://example-storage:8080"
+      timeout: "10s"

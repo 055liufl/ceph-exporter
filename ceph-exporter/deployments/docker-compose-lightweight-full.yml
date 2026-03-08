@@ -1,0 +1,231 @@
+# =============================================================================
+# ceph-exporter Lightweight Full Stack (Recommended)
+# =============================================================================
+# Purpose: Lightweight complete deployment configuration for CentOS 7 + Docker
+# Components: Ceph Demo + Monitoring Stack + ELK + Jaeger
+# Resource Requirements: 4-6GB memory, 2-4 CPU cores
+# Use Case: Complete testing, feature validation, demo environment
+#
+# Usage:
+#   # Start services
+#   docker-compose -f docker-compose-lightweight-full.yml up -d
+#   or
+#   ./scripts/deploy.sh full
+#
+# Access URLs:
+#   - Ceph Dashboard: http://localhost:8080
+#   - Prometheus: http://localhost:9090
+#   - Grafana: http://localhost:3000 (admin/admin)
+#   - Elasticsearch: http://localhost:9200
+#   - Kibana: http://localhost:5601
+#   - Jaeger UI: http://localhost:16686
+#   - Alertmanager: http://localhost:9093
+# =============================================================================
+
+version: "2.1"
+
+services:
+  # ===========================================================================
+  # Ceph Cluster - Using lightweight Demo version
+  # ===========================================================================
+
+  ceph-demo:
+    image: ceph/daemon:latest-nautilus
+    container_name: ceph-demo
+    hostname: ceph-demo
+    environment:
+      - CEPH_DAEMON=demo
+      - MON_IP=172.20.0.10
+      - CEPH_PUBLIC_NETWORK=172.20.0.0/16
+      - CEPH_DEMO_UID=demo
+      - CEPH_DEMO_ACCESS_KEY=demo_access_key
+      - CEPH_DEMO_SECRET_KEY=demo_secret_key
+      - RGW_CIVETWEB_PORT=8080
+      - DEMO_DAEMONS=mon,mgr,osd,rgw
+    ports:
+      - "8080:8080"  # Ceph Dashboard
+      - "5000:5000"  # RGW
+    networks:
+      ceph-network:
+        ipv4_address: 172.20.0.10
+      monitor-network:
+    volumes:
+      - ceph-demo-data:/var/lib/ceph
+      - ceph-demo-config:/etc/ceph
+    privileged: true
+    restart: unless-stopped
+    mem_limit: 1024m
+
+  # ===========================================================================
+  # Monitoring Stack
+  # ===========================================================================
+
+  ceph-exporter:
+    image: ceph-exporter:dev
+    container_name: ceph-exporter
+    ports:
+      - "9128:9128"
+    environment:
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    networks:
+      - ceph-network
+      - monitor-network
+    volumes:
+      - ceph-demo-config:/etc/ceph:ro
+      - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
+    restart: unless-stopped
+    depends_on:
+      - ceph-demo
+    mem_limit: 128m
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    networks:
+      - monitor-network
+    volumes:
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    depends_on:
+      - ceph-exporter
+    mem_limit: 512m
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=
+    networks:
+      - monitor-network
+    volumes:
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    mem_limit: 256m
+
+  alertmanager:
+    image: prom/alertmanager:v0.25.0
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    networks:
+      - monitor-network
+    volumes:
+      - alertmanager-data:/alertmanager
+    restart: unless-stopped
+    mem_limit: 128m
+
+  # ===========================================================================
+  # Logging Stack (ELK) - Lightweight configuration
+  # ===========================================================================
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+      - bootstrap.memory_lock=false
+    ports:
+      - "9200:9200"
+    networks:
+      - logging-network
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    mem_limit: 512m
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.0
+    container_name: logstash
+    ports:
+      - "5044:5044"
+      - "5001:5000"
+    networks:
+      - logging-network
+    environment:
+      - "LS_JAVA_OPTS=-Xms128m -Xmx128m"
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+    mem_limit: 256m
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - NODE_OPTIONS=--max-old-space-size=384
+    networks:
+      - logging-network
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+    mem_limit: 512m
+
+  # ===========================================================================
+  # Tracing System (Jaeger)
+  # ===========================================================================
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.35
+    container_name: jaeger
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - MEMORY_MAX_TRACES=1000
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Collector HTTP
+      - "6831:6831/udp"  # Jaeger compact thrift
+    networks:
+      - tracing-network
+    restart: unless-stopped
+    mem_limit: 256m
+
+# =============================================================================
+# Network Configuration
+# =============================================================================
+
+networks:
+  ceph-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  monitor-network:
+    driver: bridge
+  logging-network:
+    driver: bridge
+  tracing-network:
+    driver: bridge
+
+# =============================================================================
+# Data Volumes
+# =============================================================================
+
+volumes:
+  ceph-demo-data:
+  ceph-demo-config:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:
+  elasticsearch-data:

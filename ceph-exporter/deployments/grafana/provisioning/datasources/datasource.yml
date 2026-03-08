@@ -1,0 +1,24 @@
+# =============================================================================
+# Grafana Data Source Auto-Configuration (Provisioning)
+# =============================================================================
+# This file defines data sources that Grafana automatically configures on startup.
+# Grafana will read this file on startup and automatically create the Prometheus data source,
+# without needing to manually add it in the Web UI.
+#
+# Documentation: https://grafana.com/docs/grafana/latest/administration/provisioning/
+# =============================================================================
+
+apiVersion: 1
+
+# Data source list
+datasources:
+  # Prometheus data source
+  - name: Prometheus                    # Data source name (referenced in dashboards)
+    type: prometheus                    # Data source type
+    access: proxy                       # Access mode: proxy (access through Grafana backend proxy)
+    url: http://prometheus:9090         # Prometheus address (Docker service name resolution)
+    isDefault: true                     # Set as default data source
+    editable: false                     # Disable editing in Web UI (managed by provisioning)
+    jsonData:
+      timeInterval: "15s"              # Minimum scrape interval (consistent with Prometheus scrape_interval)
+      httpMethod: POST                 # Use POST method for queries (supports longer PromQL expressions)

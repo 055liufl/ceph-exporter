@@ -1,0 +1,159 @@
+# =============================================================================
+# ceph-exporter Complete Monitoring Stack - Docker Compose Configuration
+# =============================================================================
+# Purpose: Original monitoring stack configuration (backward compatible)
+# Components: ceph-exporter + Prometheus + Grafana + Alertmanager
+# Resource Requirements: 1GB memory, 1-2 CPU cores
+# Use Case: Standard deployment with existing Ceph cluster
+#
+# Usage:
+#   docker-compose up -d
+#   or
+#   ./scripts/deploy.sh up
+#
+# Access URLs:
+#   - Prometheus: http://localhost:9090
+#   - Grafana: http://localhost:3000 (admin/admin)
+#   - Alertmanager: http://localhost:9093
+#   - ceph-exporter: http://localhost:9128/metrics
+# =============================================================================
+
+version: "2.1"
+
+services:
+
+  # ceph-exporter - Ceph Cluster Prometheus Metrics Exporter
+  ceph-exporter:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: ceph-exporter:dev
+    container_name: ceph-exporter
+    ports:
+      - "9128:9128"
+    volumes:
+      # Note: This configuration assumes Ceph cluster is installed on the host
+      # For test environments, use docker-compose-lightweight-full.yml
+      # or docker-compose-ceph-demo.yml to deploy Ceph Demo container
+      - /etc/ceph:/etc/ceph:ro
+      - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
+    environment:
+      - CEPH_CONFIG=/etc/ceph/ceph.conf
+      - CEPH_USER=admin
+      - CEPH_CLUSTER=ceph
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    networks:
+      - ceph-monitor-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9128/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Prometheus - Time-Series Database
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    networks:
+      - ceph-monitor-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - ceph-exporter
+    restart: unless-stopped
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Grafana - Visualization Dashboard
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    networks:
+      - ceph-monitor-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Alertmanager - Alert Manager
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    networks:
+      - ceph-monitor-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  ceph-monitor-net:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:

@@ -1,0 +1,130 @@
+# =============================================================================
+# Integration Test Docker Compose Configuration
+# =============================================================================
+# Purpose: Integration testing with Ceph Demo cluster
+# Components: Ceph Demo + ceph-exporter + Prometheus + Grafana
+# Resource Requirements: 2-3GB memory, 2 CPU cores
+# =============================================================================
+
+version: "2.1"
+
+services:
+  # Ceph Demo - Single-node Ceph cluster for testing
+  ceph-demo:
+    image: ceph/demo:latest-nautilus
+    container_name: ceph-demo-test
+    hostname: ceph-demo
+    environment:
+      - MON_IP=172.20.0.10
+      - CEPH_PUBLIC_NETWORK=172.20.0.0/16
+      - CEPH_DEMO_UID=demo
+      - CEPH_DEMO_ACCESS_KEY=demo_access_key
+      - CEPH_DEMO_SECRET_KEY=demo_secret_key
+      - RGW_CIVETWEB_PORT=8080
+    ports:
+      - "8080:8080"
+    networks:
+      test-network:
+        ipv4_address: 172.20.0.10
+    volumes:
+      - ceph-demo-data:/var/lib/ceph
+      - ceph-demo-config:/etc/ceph
+    privileged: true
+    restart: unless-stopped
+    mem_limit: 1024m
+
+  # ceph-exporter - Metrics collector
+  ceph-exporter:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: ceph-exporter:test
+    container_name: ceph-exporter-test
+    ports:
+      - "9128:9128"
+    volumes:
+      - ceph-demo-config:/etc/ceph:ro
+      - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
+    environment:
+      - CEPH_CONFIG=/etc/ceph/ceph.conf
+      - CEPH_USER=admin
+      - CEPH_CLUSTER=ceph
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    networks:
+      - test-network
+    depends_on:
+      - ceph-demo
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9128/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 128m
+
+  # Prometheus - Time-series database
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus-test
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-test-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    networks:
+      - test-network
+    depends_on:
+      - ceph-exporter
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    mem_limit: 512m
+
+  # Grafana - Visualization dashboard
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana-test
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-test-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    networks:
+      - test-network
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    mem_limit: 256m
+
+networks:
+  test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  ceph-demo-data:
+  ceph-demo-config:
+  prometheus-test-data:
+  grafana-test-data:

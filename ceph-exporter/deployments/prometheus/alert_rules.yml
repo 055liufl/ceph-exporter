@@ -1,0 +1,289 @@
+# =============================================================================
+# Prometheus Alert Rules - Ceph Cluster Monitoring
+# =============================================================================
+# This file defines alert rules for Ceph cluster, covering the following scenarios:
+#
+# 1. Cluster Health Alerts
+#    - Cluster in HEALTH_WARN state
+#    - Cluster in HEALTH_ERR state (emergency)
+#
+# 2. OSD Alerts
+#    - OSD node down
+#    - OSD node kicked out of cluster
+#    - OSD high utilization
+#    - OSD high latency
+#
+# 3. Capacity Alerts
+#    - Cluster capacity usage > 75% (warning)
+#    - Cluster capacity usage > 85% (critical)
+#    - Cluster capacity usage > 95% (emergency)
+#
+# 4. PG Alerts
+#    - PGs not in active+clean state
+#
+# 5. Monitor Alerts
+#    - Monitor not in quorum
+#    - Monitor clock skew too large
+#
+# 6. Service Availability Alerts
+#    - ceph-exporter service unavailable
+#
+# Alert Severity Levels:
+#   - warning:   Warning level, needs attention but not urgent
+#   - critical:  Critical level, needs prompt handling
+#   - emergency: Emergency level, needs immediate action
+# =============================================================================
+
+groups:
+  # ===========================================================================
+  # Cluster Health Alert Group
+  # ===========================================================================
+  - name: ceph_cluster_health
+    # Rule evaluation interval (uses global default 15s)
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Cluster in HEALTH_WARN state
+      # -----------------------------------------------------------------------
+      # Triggers when ceph_health_status == 1 (0=OK, 1=WARN, 2=ERR)
+      # Requires 5 minutes duration to avoid noise from brief fluctuations
+      - alert: CephClusterWarning
+        expr: ceph_health_status == 1
+        for: 5m
+        labels:
+          severity: warning
+          component: cluster
+        annotations:
+          summary: "Ceph cluster in HEALTH_WARN state"
+          description: "Ceph cluster health status is HEALTH_WARN for more than 5 minutes. Check cluster status: ceph health detail"
+
+      # -----------------------------------------------------------------------
+      # Cluster in HEALTH_ERR state (emergency)
+      # -----------------------------------------------------------------------
+      # Triggers when ceph_health_status == 2
+      # Only requires 1 minute duration as ERR state usually means potential data corruption
+      - alert: CephClusterError
+        expr: ceph_health_status == 2
+        for: 1m
+        labels:
+          severity: critical
+          component: cluster
+        annotations:
+          summary: "Ceph cluster in HEALTH_ERR state"
+          description: "Ceph cluster health status is HEALTH_ERR for more than 1 minute. Possible data loss risk, check immediately: ceph health detail"
+
+  # ===========================================================================
+  # OSD Alert Group
+  # ===========================================================================
+  - name: ceph_osd_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # OSD node down
+      # -----------------------------------------------------------------------
+      # Triggers when OSD up status is 0
+      - alert: CephOSDDown
+        expr: ceph_osd_up == 0
+        for: 3m
+        labels:
+          severity: warning
+          component: osd
+        annotations:
+          summary: "OSD {{ $labels.osd }} is down"
+          description: "OSD {{ $labels.osd }} has been in down state for more than 3 minutes. Check the node status where this OSD is located."
+
+      # -----------------------------------------------------------------------
+      # OSD node kicked out of cluster
+      # -----------------------------------------------------------------------
+      # Triggers when OSD in status is 0 (OSD marked as out)
+      - alert: CephOSDOut
+        expr: ceph_osd_in == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: osd
+        annotations:
+          summary: "OSD {{ $labels.osd }} has been kicked out of cluster"
+          description: "OSD {{ $labels.osd }} has been in out state for more than 5 minutes. Data is rebalancing, please check this OSD."
+
+      # -----------------------------------------------------------------------
+      # OSD high utilization (> 85%)
+      # -----------------------------------------------------------------------
+      - alert: CephOSDHighUtilization
+        expr: ceph_osd_utilization > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: osd
+        annotations:
+          summary: "OSD {{ $labels.osd }} high utilization: {{ $value | printf \"%.1f\" }}%"
+          description: "OSD {{ $labels.osd }} disk utilization has exceeded 85% for 10 minutes. Consider expansion or data rebalancing."
+
+      # -----------------------------------------------------------------------
+      # OSD high latency (apply latency > 500ms)
+      # -----------------------------------------------------------------------
+      - alert: CephOSDHighLatency
+        expr: ceph_osd_apply_latency_ms > 500
+        for: 5m
+        labels:
+          severity: warning
+          component: osd
+        annotations:
+          summary: "OSD {{ $labels.osd }} high write latency: {{ $value | printf \"%.0f\" }}ms"
+          description: "OSD {{ $labels.osd }} apply latency exceeds 500ms for 5 minutes. Possible disk performance issue."
+
+      # -----------------------------------------------------------------------
+      # Multiple OSDs down simultaneously (> 10% of OSDs down)
+      # -----------------------------------------------------------------------
+      - alert: CephMultipleOSDDown
+        expr: (ceph_cluster_osds_total - ceph_cluster_osds_up) / ceph_cluster_osds_total > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          component: osd
+        annotations:
+          summary: "More than 10% of OSDs are down"
+          description: "{{ $value | printf \"%.0f\" }}% of OSDs in the cluster are in down state. Total OSDs: {{ with query \"ceph_cluster_osds_total\" }}{{ . | first | value }}{{ end }}, Up: {{ with query \"ceph_cluster_osds_up\" }}{{ . | first | value }}{{ end }}"
+
+  # ===========================================================================
+  # Capacity Alert Group
+  # ===========================================================================
+  - name: ceph_capacity_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Cluster capacity usage > 75% (warning)
+      # -----------------------------------------------------------------------
+      - alert: CephClusterCapacityWarning
+        expr: (ceph_cluster_used_bytes / ceph_cluster_total_bytes) * 100 > 75
+        for: 10m
+        labels:
+          severity: warning
+          component: capacity
+        annotations:
+          summary: "Ceph cluster capacity usage exceeds 75%"
+          description: "Cluster capacity usage: {{ $value | printf \"%.1f\" }}%. Total capacity: {{ with query \"ceph_cluster_total_bytes\" }}{{ . | first | value | humanize1024 }}B{{ end }}, Used: {{ with query \"ceph_cluster_used_bytes\" }}{{ . | first | value | humanize1024 }}B{{ end }}"
+
+      # -----------------------------------------------------------------------
+      # Cluster capacity usage > 85% (critical)
+      # -----------------------------------------------------------------------
+      - alert: CephClusterCapacityCritical
+        expr: (ceph_cluster_used_bytes / ceph_cluster_total_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: critical
+          component: capacity
+        annotations:
+          summary: "Ceph cluster capacity usage exceeds 85%"
+          description: "Cluster capacity usage: {{ $value | printf \"%.1f\" }}%. Please expand capacity soon to avoid cluster entering NEARFULL state."
+
+      # -----------------------------------------------------------------------
+      # Cluster capacity usage > 95% (emergency)
+      # -----------------------------------------------------------------------
+      - alert: CephClusterCapacityEmergency
+        expr: (ceph_cluster_used_bytes / ceph_cluster_total_bytes) * 100 > 95
+        for: 1m
+        labels:
+          severity: emergency
+          component: capacity
+        annotations:
+          summary: "Ceph cluster capacity nearly exhausted"
+          description: "Cluster capacity usage: {{ $value | printf \"%.1f\" }}%. Cluster may stop accepting writes soon, expand capacity or clean up data immediately!"
+
+  # ===========================================================================
+  # PG Alert Group
+  # ===========================================================================
+  - name: ceph_pg_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # PGs not in active+clean state
+      # -----------------------------------------------------------------------
+      # Normally all PGs should be in active+clean state
+      # Other states (degraded, recovering, backfilling) indicate incomplete data or recovery in progress
+      - alert: CephPGNotClean
+        expr: ceph_cluster_pgs_by_state{state!="active+clean"} > 0
+        for: 15m
+        labels:
+          severity: warning
+          component: pg
+        annotations:
+          summary: "PGs not in active+clean state exist"
+          description: "{{ $value }} PGs are in {{ $labels.state }} state for 15 minutes. Check: ceph pg stat"
+
+      # -----------------------------------------------------------------------
+      # Total PG count is 0 (cluster may be abnormal)
+      # -----------------------------------------------------------------------
+      - alert: CephNoPGs
+        expr: ceph_cluster_pgs_total == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: pg
+        annotations:
+          summary: "Ceph cluster has 0 total PGs"
+          description: "No Placement Groups exist in the cluster, which usually means abnormal cluster configuration or all pools have been deleted."
+
+  # ===========================================================================
+  # Monitor Alert Group
+  # ===========================================================================
+  - name: ceph_monitor_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Monitor not in quorum
+      # -----------------------------------------------------------------------
+      - alert: CephMonitorOutOfQuorum
+        expr: ceph_monitor_in_quorum == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: monitor
+        annotations:
+          summary: "Monitor {{ $labels.monitor }} not in quorum"
+          description: "Monitor {{ $labels.monitor }} has been out of quorum for more than 2 minutes. If majority of monitors are out of quorum, cluster will not function properly."
+
+      # -----------------------------------------------------------------------
+      # Monitor clock skew too large (> 0.5 seconds)
+      # -----------------------------------------------------------------------
+      - alert: CephMonitorClockSkew
+        expr: abs(ceph_monitor_clock_skew_sec) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: monitor
+        annotations:
+          summary: "Monitor {{ $labels.monitor }} clock skew too large: {{ $value | printf \"%.3f\" }}s"
+          description: "Monitor {{ $labels.monitor }} clock skew exceeds 0.5 seconds. Check NTP synchronization status."
+
+  # ===========================================================================
+  # Service Availability Alert Group
+  # ===========================================================================
+  - name: ceph_exporter_alerts
+    rules:
+
+      # -----------------------------------------------------------------------
+      # ceph-exporter service unavailable
+      # -----------------------------------------------------------------------
+      - alert: CephExporterDown
+        expr: up{job="ceph-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: exporter
+        annotations:
+          summary: "ceph-exporter service unavailable"
+          description: "Prometheus cannot scrape metrics from ceph-exporter for 2 minutes. Check ceph-exporter container status."
+
+      # -----------------------------------------------------------------------
+      # ceph-exporter scrape latency too high (> 10 seconds)
+      # -----------------------------------------------------------------------
+      - alert: CephExporterSlowScrape
+        expr: scrape_duration_seconds{job="ceph-exporter"} > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: exporter
+        annotations:
+          summary: "ceph-exporter scrape latency too high: {{ $value | printf \"%.1f\" }}s"
+          description: "ceph-exporter metric scraping takes more than 10 seconds for 5 minutes. Possible slow Ceph cluster response or network issue."

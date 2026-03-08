@@ -1,0 +1,47 @@
+# 简化版 pre-commit 配置（适配项目结构）
+# Go 代码在 ceph-exporter 子目录中
+
+repos:
+  # Go 格式化和检查
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+        args: ['-s']
+        files: ^ceph-exporter/.*\.go$
+      - id: go-imports
+        args: ['-local', 'ceph-exporter']
+        files: ^ceph-exporter/.*\.go$
+      - id: go-vet
+        args: ['./ceph-exporter/...']
+        pass_filenames: false
+      - id: go-mod-tidy
+        files: ^ceph-exporter/go\.(mod|sum)$
+
+  # 本地 golangci-lint
+  - repo: local
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'cd ceph-exporter && golangci-lint run --config ../.golangci.yml --timeout 5m'
+        language: system
+        files: ^ceph-exporter/.*\.go$
+        pass_filenames: false
+
+      - id: go-test
+        name: go test
+        entry: bash -c 'cd ceph-exporter && CGO_ENABLED=0 go test -v -count=1 ./internal/...'
+        language: system
+        pass_filenames: false
+        always_run: false
+
+# 全局设置
+exclude: |
+  (?x)^(
+    vendor/|
+    .*\.pb\.go$|
+    .*_generated\.go$|
+    build/|
+    .git/|
+    ceph_exporter/
+  )$

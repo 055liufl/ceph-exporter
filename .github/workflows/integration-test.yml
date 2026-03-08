@@ -1,0 +1,54 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  integration-test:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: ceph-exporter/test/integration/go.sum
+
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Verify Docker installation
+        run: |
+          docker --version
+          docker-compose --version
+
+      - name: Run integration tests
+        working-directory: ./ceph-exporter/test/integration
+        run: go test -v -timeout 30m
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker-compose -f ceph-exporter/deployments/docker-compose.yml logs > integration-test-logs.txt
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: integration-test-logs.txt
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f ceph-exporter/deployments/docker-compose.yml down -v || true

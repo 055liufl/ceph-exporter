@@ -1,0 +1,41 @@
+# golangci-lint configuration for ceph-exporter
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  go: '1.21'
+  # Build tags for CGO-free compilation
+  build-tags:
+    - '!cgo'
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - goimports
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment  # can be noisy
+  goimports:
+    local-prefixes: ceph-exporter
+
+issues:
+  exclude-dirs:
+    - vendor
+    - build
+    - .git
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosimple
+  max-issues-per-linter: 0
+  max-same-issues: 0

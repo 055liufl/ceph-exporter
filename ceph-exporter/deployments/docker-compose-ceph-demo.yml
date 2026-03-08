@@ -1,0 +1,39 @@
+version: "2.1"
+
+services:
+  # Ceph Demo - Single-node Ceph cluster
+  ceph-demo:
+    image: ceph/daemon:latest-nautilus
+    container_name: ceph-demo
+    hostname: ceph-demo
+    environment:
+      - CEPH_DAEMON=demo
+      - MON_IP=172.20.0.10
+      - CEPH_PUBLIC_NETWORK=172.20.0.0/16
+      - CEPH_DEMO_UID=demo
+      - CEPH_DEMO_ACCESS_KEY=demo_access_key
+      - CEPH_DEMO_SECRET_KEY=demo_secret_key
+      - CEPH_DEMO_BUCKET=demo-bucket
+      - RGW_CIVETWEB_PORT=8080
+    ports:
+      - "8080:8080"  # Ceph Dashboard
+      - "5000:5000"  # RGW
+    networks:
+      ceph-network:
+        ipv4_address: 172.20.0.10
+    volumes:
+      - ceph-demo-data:/var/lib/ceph
+      - ceph-demo-config:/etc/ceph
+    privileged: true
+    restart: unless-stopped
+
+networks:
+  ceph-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  ceph-demo-data:
+  ceph-demo-config:

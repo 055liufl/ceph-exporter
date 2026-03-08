@@ -1,0 +1,25 @@
+# Build outputs
+ceph-exporter/build/
+ceph-exporter/ceph-exporter
+ceph-exporter/ceph-exporter.exe
+ceph-exporter/*.exe
+*.exe
+*.out
+
+# Test outputs
+coverage.out
+coverage.html
+test-summary.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pre-commit
+pre-commit/

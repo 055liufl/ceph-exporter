@@ -1,0 +1,102 @@
+#!/bin/bash
+# =============================================================================
+# Pre-commit 快速修复脚本 - 详细中文注释版本
+# =============================================================================
+# 功能说明：
+#   解决 pre-commit 在使用时遇到的 SSL 证书验证错误
+#
+# 常见问题：
+#   - SSL: CERTIFICATE_VERIFY_FAILED
+#   - URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED]>
+#   - 下载 pre-commit hooks 失败
+#
+# 解决方案：
+#   1. 配置 pip 使用国内镜像源（避免 SSL 问题）
+#   2. 清理 pre-commit 缓存
+#   3. 提供多种配置选项（完整/简化/跳过）
+#
+# 使用方法：
+#   ./scripts/fix-precommit.sh
+#
+# 适用环境：
+#   - Linux
+#   - macOS
+#   - Windows (Git Bash/MSYS)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Bash 严格模式
+# -----------------------------------------------------------------------------
+# set -e: 遇到错误立即退出
+set -e
+
+# -----------------------------------------------------------------------------
+# 显示标题
+# -----------------------------------------------------------------------------
+echo "=========================================="
+echo "Pre-commit SSL 问题快速修复"
+echo "=========================================="
+echo ""
+
+# -----------------------------------------------------------------------------
+# 检测操作系统并设置配置文件路径
+# -----------------------------------------------------------------------------
+# 说明：
+#   - Windows 和 Linux/Mac 的 pip 配置文件位置不同
+#   - Windows: %APPDATA%/pip/pip.ini
+#   - Linux/Mac: ~/.pip/pip.conf
+
+# 检查操作系统类型
+# $OSTYPE: Bash 内置变量，表示操作系统类型
+#   - msys: Git Bash on Windows
+#   - win32: Windows
+#   - linux-gnu: Linux
+#   - darwin: macOS
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    # Windows 环境
+    IS_WINDOWS=true
+    # APPDATA: Windows 环境变量，指向用户应用数据目录
+    # 例如: C:\Users\username\AppData\Roaming
+    PIP_CONFIG_DIR="$APPDATA/pip"
+    PIP_CONFIG_FILE="$PIP_CONFIG_DIR/pip.ini"
+else
+    # Linux/Mac 环境
+    IS_WINDOWS=false
+    # HOME: 用户主目录
+    # 例如: /home/username 或 /Users/username
+    PIP_CONFIG_DIR="$HOME/.pip"
+    PIP_CONFIG_FILE="$PIP_CONFIG_DIR/pip.conf"
+fi
+
+# -----------------------------------------------------------------------------
+# 步骤 1: 配置 pip 使用国内镜像源
+# -----------------------------------------------------------------------------
+# 说明：
+#   - 国内访问 PyPI 官方源速度慢且可能有 SSL 问题
+#   - 使用清华大学镜像源可以解决这些问题
+#   - trusted-host: 信任该主机，跳过 SSL 验证
+
+echo "步骤 1: 配置 pip 使用国内镜像源"
+echo "----------------------------------------"
+
+# 创建配置目录（如果不存在）
+# -p: 如果父目录不存在，一并创建；如果目录已存在，不报错
+mkdir -p "$PIP_CONFIG_DIR"
+
+# 写入 pip 配置文件
+# cat > file << 'EOF': Here Document，将多行内容写入文件
+# 'EOF': 单引号表示不展开变量
+cat > "$PIP_CONFIG_FILE" << 'EOF'
+[global]
+# index-url: pip 安装包时使用的索引地址
+# 使用清华大学 PyPI 镜像源
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+
+# trusted-host: 信任的主机，跳过 SSL 证书验证
+# 这是解决 SSL 错误的关键配置
+trusted-host = pypi.tuna.tsinghua.edu.cn
+
+[install]
+# install 命令专用配置
+# 再次指定 trusted-host 确保安装时不验证 SSL
+trusted-host = pypi.tuna.tsinghua.edu.cn

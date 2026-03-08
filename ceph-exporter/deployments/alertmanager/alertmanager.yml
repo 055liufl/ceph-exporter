@@ -1,0 +1,135 @@
+# =============================================================================
+# Alertmanager Configuration File
+# =============================================================================
+# This file defines alert routing, grouping, inhibition, and notification channels.
+#
+# Alert Processing Flow:
+#   1. Prometheus triggers alerts based on rules and sends to Alertmanager
+#   2. Alertmanager matches alerts to corresponding receivers based on route rules
+#   3. Alerts in the same group are aggregated to avoid alert storms
+#   4. inhibit_rules define alert inhibition relationships (high-level alerts suppress low-level)
+#   5. Send notifications through channels configured in receivers
+#
+# Notification Channels (configure according to actual environment):
+#   - webhook:  Webhook notification (default, can integrate with WeCom, DingTalk, etc.)
+#   - email:    Email notification (requires SMTP configuration)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Global Configuration
+# -----------------------------------------------------------------------------
+global:
+  # Alert resolution wait time
+  # After alert disappears, wait this time before sending recovery notification to avoid alert flapping
+  resolve_timeout: 5m
+
+  # SMTP email configuration (uncomment and fill in actual values if email notification is needed)
+  # smtp_smarthost: "smtp.example.com:587"
+  # smtp_from: "alertmanager@example.com"
+  # smtp_auth_username: "alertmanager@example.com"
+  # smtp_auth_password: "password"
+  # smtp_require_tls: true
+
+# -----------------------------------------------------------------------------
+# Notification Templates
+# -----------------------------------------------------------------------------
+# templates:
+#   - "/etc/alertmanager/templates/*.tmpl"
+
+# -----------------------------------------------------------------------------
+# Routing Rules
+# -----------------------------------------------------------------------------
+# Define how alerts are routed to different notification channels
+route:
+  # Grouping criteria: group by alertname (alert name) and component
+  # Alerts in the same group will be aggregated into one notification
+  group_by: ["alertname", "component"]
+
+  # Initial alert wait time
+  # After receiving a new alert, wait 30 seconds to collect other alerts in the same group before sending
+  group_wait: 30s
+
+  # Same-group alert send interval
+  # Interval for subsequent notifications of alerts in the same group (avoid frequent sending)
+  group_interval: 5m
+
+  # Repeat notification interval
+  # If a sent alert persists, repeat notification every 4 hours
+  repeat_interval: 4h
+
+  # Default receiver
+  receiver: "default-webhook"
+
+  # Sub-routing rules (matched by priority from top to bottom)
+  routes:
+    # Emergency alert route: severity=emergency or severity=critical
+    # Shorten wait time to send notifications quickly
+    - match_re:
+        severity: "critical|emergency"
+      receiver: "critical-webhook"
+      group_wait: 10s          # Emergency alerts only wait 10 seconds
+      repeat_interval: 1h     # Repeat notification every hour
+
+    # OSD-related alert route
+    - match:
+        component: "osd"
+      receiver: "default-webhook"
+      group_by: ["alertname", "osd"]
+
+    # Capacity-related alert route
+    - match:
+        component: "capacity"
+      receiver: "default-webhook"
+      repeat_interval: 2h     # Capacity alerts repeat every 2 hours
+
+# -----------------------------------------------------------------------------
+# Inhibition Rules
+# -----------------------------------------------------------------------------
+# When high-level alerts exist, suppress low-level alerts of the same type to reduce alert noise
+inhibit_rules:
+  # Rule 1: critical alerts suppress warning alerts of the same component
+  # Example: When CephClusterError (critical) exists, suppress CephClusterWarning (warning)
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    # Only suppress when source and target have the same component label
+    equal: ["component"]
+
+  # Rule 2: emergency alerts suppress critical and warning alerts of the same component
+  - source_match:
+      severity: "emergency"
+    target_match_re:
+      severity: "critical|warning"
+    equal: ["component"]
+
+# -----------------------------------------------------------------------------
+# Receiver Definitions
+# -----------------------------------------------------------------------------
+receivers:
+  # Default Webhook receiver
+  # POST alerts in JSON format to specified URL
+  # Can integrate with WeCom bot, DingTalk bot, custom alert handling service, etc.
+  - name: "default-webhook"
+    webhook_configs:
+      - url: "http://localhost:5001/webhook/alerts"
+        send_resolved: true    # Also send notification when alert recovers
+        http_config:
+          basic_auth:
+            username: ""
+            password: ""
+
+  # Critical alert Webhook receiver
+  # Used to receive critical and emergency level alerts
+  - name: "critical-webhook"
+    webhook_configs:
+      - url: "http://localhost:5001/webhook/critical"
+        send_resolved: true
+
+  # Email receiver (example, requires SMTP settings in global)
+  # - name: "email-alerts"
+  #   email_configs:
+  #     - to: "ops-team@example.com"
+  #       send_resolved: true
+  #       headers:
+  #         Subject: "[Ceph Alert] {{ .GroupLabels.alertname }}"

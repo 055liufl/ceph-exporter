@@ -1,0 +1,24 @@
+# =============================================================================
+# Grafana Dashboard Auto-Configuration (Provisioning)
+# =============================================================================
+# This file defines dashboard directories that Grafana automatically loads on startup.
+# Grafana will scan JSON files in the specified directory and automatically import them as dashboards.
+#
+# Documentation: https://grafana.com/docs/grafana/latest/administration/provisioning/
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  # Ceph monitoring dashboard provider
+  - name: "Ceph Dashboards"            # Provider name
+    orgId: 1                            # Organization ID (default organization)
+    folder: "Ceph"                      # Folder name where dashboards are stored
+    type: file                          # Type: load from files
+    disableDeletion: false              # Allow deletion in Web UI
+    editable: true                      # Allow editing in Web UI
+    updateIntervalSeconds: 30           # File change check interval (seconds)
+    allowUiUpdates: true                # Allow updates through UI
+    options:
+      path: /var/lib/grafana/dashboards # Dashboard JSON file directory (container path)
+      foldersFromFilesStructure: false  # Don't create folders based on file directory structure
