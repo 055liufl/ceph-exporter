@@ -64,6 +64,8 @@ chmod +x scripts/deploy.sh
 
 数据存储在项目目录下，方便备份和管理。详见 [数据存储说明](ceph-exporter/deployments/DATA_STORAGE.md)。
 
+**时区配置**: 所有容器已自动挂载宿主机时区（`/etc/localtime` 和 `/etc/timezone`），确保容器时间与宿主机一致。
+
 ## 步骤 5: 验证部署
 
 ```bash
@@ -157,4 +159,4 @@ docker info | grep -A 5 "Registry Mirrors"
 ---
 
 **版本**: 2.0
-**最后更新**: 2026-03-08
+**最后更新**: 2026-03-09

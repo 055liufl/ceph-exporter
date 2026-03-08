@@ -261,9 +261,9 @@ ceph-exporter/
 | Phase 1 | 项目骨架搭建（配置、日志、Ceph 客户端、HTTP 服务器、程序入口） | 已完成 |
 | Phase 2 | Prometheus 采集器完整实现（集群、存储池、OSD、Monitor、健康状态、MDS、RGW） | 已完成 |
 | Phase 3 | 全量单元测试（7 个采集器 × 3 维度：Describe / Collect / Error） | 已完成 |
-| Phase 4 | OpenTelemetry 追踪系统完整实现 | 待开发 |
-| Phase 5 | 告警规则与 Grafana 仪表盘 | 待开发 |
-| Phase 6 | 插件系统完整实现（.so 动态库 + HTTP 远程插件） | 待开发 |
+| Phase 4 | OpenTelemetry 追踪系统完整实现 | 已完成 |
+| Phase 5 | 告警规则与 Grafana 仪表盘 | 已完成 |
+| Phase 6 | 插件系统完整实现（HTTP 远程插件） | 已完成 |
 
 ## 验收方式
 

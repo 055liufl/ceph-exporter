@@ -1,7 +1,7 @@
 # 脚本文件详细说明 - 中文注释版本
 
 **创建日期**: 2026-03-07
-**最后更新**: 2026-03-08
+**最后更新**: 2026-03-09
 **用途**: 帮助理解所有部署和维护脚本的功能和用法
 
 ---
@@ -100,15 +100,18 @@
 ./deploy.sh check           # 检查环境
 ./deploy.sh mirror          # 配置镜像加速
 ./deploy.sh pull            # 预拉取镜像
+./deploy.sh init            # 初始化数据目录（包含时区配置说明）
 ./deploy.sh minimal         # 部署最小栈
 ./deploy.sh integration     # 部署集成测试
 ./deploy.sh full            # 部署完整栈
 ./deploy.sh status          # 查看状态
 ./deploy.sh logs [service]  # 查看日志
-./deploy.sh verify          # 验证部署
+./deploy.sh verify          # 验证部署（包含时区验证）
 ./deploy.sh stop            # 停止服务
 ./deploy.sh clean           # 清理数据
 ```
+
+**时区配置**: 所有部署模式都会自动挂载宿主机时区（`/etc/localtime` 和 `/etc/timezone`），确保容器时间与宿主机一致。
 
 #### 1.6 关键配置项说明
 
@@ -611,6 +614,10 @@ command || {
 
 ---
 
-**文档版本**: 1.0
-**最后更新**: 2026-03-07
+**文档版本**: 1.1
+**最后更新**: 2026-03-09
 **维护者**: ceph-exporter 项目团队
+
+**更新日志**:
+- **2026-03-09**: 添加时区配置说明，所有容器自动挂载宿主机时区
+- **2026-03-07**: 初始版本创建

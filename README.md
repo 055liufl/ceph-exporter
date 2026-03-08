@@ -30,6 +30,7 @@ cd ceph-exporter/deployments
 - 📙 [Docker 镜像加速配置](DOCKER_MIRROR_CONFIGURATION.md) - 国内用户必读
 - 📕 [部署配置说明](ceph-exporter/deployments/README.md) - Docker Compose 配置详解
 - 📓 [数据存储说明](ceph-exporter/deployments/DATA_STORAGE.md) - 数据目录结构和管理
+- 🕐 [时区配置说明](ceph-exporter/deployments/TIMEZONE_CONFIGURATION.md) - 容器时区配置详解
 
 ### 开发相关
 - 📔 [项目详细文档](ceph-exporter/README.md) - 架构设计和验收清单
@@ -166,5 +167,5 @@ golangci-lint run
 ---
 
 **版本**: 1.0
-**最后更新**: 2026-03-08
+**最后更新**: 2026-03-09
 **许可证**: MIT

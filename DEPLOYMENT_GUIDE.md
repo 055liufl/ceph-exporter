@@ -85,6 +85,12 @@ chmod +x scripts/deploy.sh
 - 方便备份、迁移和管理
 - 详见 [数据存储文档](ceph-exporter/deployments/DATA_STORAGE.md)
 
+**时区配置说明**:
+- 所有容器已配置挂载宿主机时区和时间
+- 自动挂载 `/etc/localtime` 和 `/etc/timezone`
+- 确保容器内时间与宿主机保持一致
+- 无需额外配置，开箱即用
+
 ### 方式 2: 手动部署
 
 ```bash
@@ -255,5 +261,34 @@ rm -rf data/
 
 ---
 
+## ⏰ 时区配置
+
+所有 Docker Compose 配置文件已自动配置时区挂载，容器会使用宿主机的时区设置：
+
+```yaml
+volumes:
+  - /etc/localtime:/etc/localtime:ro
+  - /etc/timezone:/etc/timezone:ro
+```
+
+**优点**:
+- 容器时间与宿主机保持一致
+- 日志时间戳准确
+- 监控数据时间正确
+- 无需手动配置时区环境变量
+
+**验证时区配置**:
+```bash
+# 检查宿主机时区
+date
+timedatectl
+
+# 检查容器时区
+docker exec ceph-exporter date
+docker exec prometheus date
+```
+
+---
+
 **版本**: 2.1
-**最后更新**: 2026-03-08
+**最后更新**: 2026-03-09
