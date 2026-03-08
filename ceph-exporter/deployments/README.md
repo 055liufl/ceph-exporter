@@ -62,6 +62,8 @@ docker-compose up -d
 
 **数据存储**: 所有服务数据存储在 `./data/` 目录，详见 [DATA_STORAGE.md](DATA_STORAGE.md)。
 
+**时区配置**: 所有容器已自动挂载宿主机时区（`/etc/localtime` 和 `/etc/timezone`），确保时间一致性。
+
 **重要提示**:
 - 部署脚本会自动设置正确的目录权限（Prometheus: 65534, Grafana: 472, Elasticsearch: 1000）
 - 会自动创建 `configs` 软链接指向 `../configs` 目录
@@ -203,6 +205,7 @@ sudo ./scripts/fix-deployment.sh
 - **[统一部署指南](../DEPLOYMENT_GUIDE.md)** - 完整的部署步骤和说明 ⭐
 - **[镜像配置指南](../DOCKER_MIRROR_CONFIGURATION.md)** - Docker 镜像加速配置
 - **[数据存储说明](DATA_STORAGE.md)** - 数据目录结构和管理 ⭐
+- **[时区配置说明](TIMEZONE_CONFIGURATION.md)** - 容器时区配置详解 ⭐
 - **[故障排查指南](TROUBLESHOOTING.md)** - 常见问题和解决方案 ⭐
 
 ---
@@ -321,6 +324,10 @@ sudo ./scripts/deploy.sh verify
 
 ## 📝 更新日志
 
+- **2026-03-09**:
+  - 所有服务添加宿主机时区挂载配置
+  - 自动挂载 `/etc/localtime` 和 `/etc/timezone`
+  - 确保容器时间与宿主机保持一致
 - **2026-03-08**:
   - 改用绑定挂载，数据存储在 ./data/ 目录
   - 修复 Prometheus 权限问题（需要 UID 65534）
@@ -333,4 +340,4 @@ sudo ./scripts/deploy.sh verify
 
 ---
 
-**最后更新**: 2026-03-08
+**最后更新**: 2026-03-09

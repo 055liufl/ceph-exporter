@@ -238,18 +238,11 @@ services:
     # 数据卷挂载
     # -------------------------------------------------------------------------
     volumes:
-      # Ceph 数据卷
-      # 存储 OSD 数据、Mon 数据等
       - ./data/ceph-demo/data:/var/lib/ceph
-
-      # Ceph 配置卷
-      # 存储配置文件和密钥
-      # 需要共享给 ceph-exporter
       - ./data/ceph-demo/config:/etc/ceph
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
-    # -------------------------------------------------------------------------
-    # 特权模式
-    # -------------------------------------------------------------------------
     privileged: true
 
     # -------------------------------------------------------------------------
@@ -326,16 +319,11 @@ services:
     # 数据卷挂载
     # -------------------------------------------------------------------------
     volumes:
-      # Ceph 配置目录 (只读)
-      # 从 ceph-demo 共享
       - ./data/ceph-demo/config:/etc/ceph:ro
-
-      # ceph-exporter 配置文件 (只读)
       - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
-    # -------------------------------------------------------------------------
-    # 重启策略
-    # -------------------------------------------------------------------------
     restart: unless-stopped
 
     # -------------------------------------------------------------------------
@@ -402,13 +390,12 @@ services:
     # 数据卷挂载
     # -------------------------------------------------------------------------
     volumes:
-      # Prometheus 数据卷
-      # 存储时序数据
       - ./data/prometheus:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
-    # -------------------------------------------------------------------------
-    # 重启策略
-    # -------------------------------------------------------------------------
     restart: unless-stopped
 
     # -------------------------------------------------------------------------
@@ -470,12 +457,13 @@ services:
     # 数据卷挂载
     # -------------------------------------------------------------------------
     volumes:
-      # Grafana 数据卷
       - ./data/grafana:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
-    # -------------------------------------------------------------------------
-    # 重启策略
-    # -------------------------------------------------------------------------
     restart: unless-stopped
 
     # -------------------------------------------------------------------------
@@ -532,12 +520,11 @@ services:
     # 数据卷挂载
     # -------------------------------------------------------------------------
     volumes:
-      # Alertmanager 数据卷
       - ./data/alertmanager:/alertmanager
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
-    # -------------------------------------------------------------------------
-    # 重启策略
-    # -------------------------------------------------------------------------
     restart: unless-stopped
 
     # -------------------------------------------------------------------------
@@ -633,14 +620,10 @@ services:
     # 数据卷挂载
     # -------------------------------------------------------------------------
     volumes:
-      # Elasticsearch 数据卷
-      # 存储索引数据
-      # 路径: /usr/share/elasticsearch/data
       - ./data/elasticsearch:/usr/share/elasticsearch/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
-    # -------------------------------------------------------------------------
-    # 重启策略
-    # -------------------------------------------------------------------------
     restart: unless-stopped
 
     # -------------------------------------------------------------------------
@@ -704,6 +687,15 @@ services:
       # -Xmx128m: 最大堆内存 128MB
       # 轻量级配置,标准配置建议 512MB 或更多
       - "LS_JAVA_OPTS=-Xms128m -Xmx128m"
+
+    # -------------------------------------------------------------------------
+    # 数据卷挂载
+    # -------------------------------------------------------------------------
+    volumes:
+      # 时区配置挂载 (只读)
+      # 确保容器时间与宿主机一致，用于准确的日志时间戳
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
     # -------------------------------------------------------------------------
     # 重启策略
@@ -771,6 +763,15 @@ services:
       #   - 内存不足会导致 Kibana 崩溃或变慢
       #   - 建议配置: 896MB (轻量级) 或 1GB+ (标准)
       - NODE_OPTIONS=--max-old-space-size=896
+
+    # -------------------------------------------------------------------------
+    # 数据卷挂载
+    # -------------------------------------------------------------------------
+    volumes:
+      # 时区配置挂载 (只读)
+      # 确保容器时间与宿主机一致，用于准确的日志时间戳
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
     # -------------------------------------------------------------------------
     # 网络配置
@@ -852,6 +853,15 @@ services:
       #   - 适合短期测试和调试
       #   - 生产环境建议使用 Elasticsearch 或 Cassandra 存储
       - MEMORY_MAX_TRACES=1000
+
+    # -------------------------------------------------------------------------
+    # 数据卷挂载
+    # -------------------------------------------------------------------------
+    volumes:
+      # 时区配置挂载 (只读)
+      # 确保容器时间与宿主机一致，用于准确的日志时间戳
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
     # -------------------------------------------------------------------------
     # 端口映射

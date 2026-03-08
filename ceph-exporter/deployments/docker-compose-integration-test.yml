@@ -29,6 +29,8 @@ services:
     volumes:
       - ./data/test/ceph-demo/data:/var/lib/ceph
       - ./data/test/ceph-demo/config:/etc/ceph
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     privileged: true
     restart: unless-stopped
     mem_limit: 1024m
@@ -45,6 +47,8 @@ services:
     volumes:
       - ./data/test/ceph-demo/config:/etc/ceph:ro
       - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     environment:
       - CEPH_CONFIG=/etc/ceph/ceph.conf
       - CEPH_USER=admin
@@ -72,6 +76,8 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./data/test/prometheus:/prometheus
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -100,6 +106,8 @@ services:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin

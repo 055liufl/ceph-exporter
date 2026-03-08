@@ -24,6 +24,8 @@ services:
     volumes:
       - ./data/ceph-demo/data:/var/lib/ceph
       - ./data/ceph-demo/config:/etc/ceph
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     privileged: true
     restart: unless-stopped
 

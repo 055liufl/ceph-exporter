@@ -224,6 +224,35 @@ check_resource_usage() {
     echo ""
 }
 
+# 检查时区配置
+check_timezone() {
+    log_step "检查容器时区配置..."
+    echo ""
+
+    local host_tz=$(date +"%Z %z")
+    echo "宿主机时区: $host_tz"
+
+    if docker ps --format '{{.Names}}' | grep -q "ceph-exporter"; then
+        local container_tz=$(docker exec ceph-exporter date +"%Z %z" 2>/dev/null || echo "无法获取")
+        if [ "$host_tz" = "$container_tz" ]; then
+            echo -e "${GREEN}✓${NC} ceph-exporter 时区与宿主机一致"
+        else
+            echo -e "${YELLOW}!${NC} ceph-exporter 时区: $container_tz (与宿主机不一致)"
+        fi
+    fi
+
+    if docker ps --format '{{.Names}}' | grep -q "prometheus"; then
+        local container_tz=$(docker exec prometheus date +"%Z %z" 2>/dev/null || echo "无法获取")
+        if [ "$host_tz" = "$container_tz" ]; then
+            echo -e "${GREEN}✓${NC} prometheus 时区与宿主机一致"
+        else
+            echo -e "${YELLOW}!${NC} prometheus 时区: $container_tz (与宿主机不一致)"
+        fi
+    fi
+
+    echo ""
+}
+
 # 生成验证报告
 generate_report() {
     log_step "生成验证报告..."
@@ -328,6 +357,7 @@ main() {
     check_endpoints
     check_prometheus_targets
     check_grafana_datasources
+    check_timezone
     check_resource_usage
     show_access_info
 

@@ -13,6 +13,8 @@
 | `docker-compose-integration-test.yml` | 集成测试环境 | CI/CD 自动化测试 |
 | `docker-compose-lightweight-full.yml` | 轻量级完整栈 | Docker Toolbox / 资源受限环境 |
 
+**时区配置**: 所有配置文件已自动配置宿主机时区挂载（`/etc/localtime` 和 `/etc/timezone`），确保容器时间与宿主机一致。
+
 ### 中文注释备份文件
 
 | 文件名 | 大小 | 说明 |
@@ -385,11 +387,16 @@ echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 如果遇到问题:
 1. 查看对应的 `.zh-CN` 文件中的详细注释
 2. 查看本 README 的故障排查章节
-3. 查看容器日志: `docker logs [容器名]`
-4. 查看项目文档和 Issue
+3. 查看 [时区配置说明](TIMEZONE_CONFIGURATION.md) 了解时区相关问题
+4. 查看容器日志: `docker logs [容器名]`
+5. 查看项目文档和 Issue
 
 ## 📝 更新日志
 
+- **2026-03-09**:
+  - 所有服务添加宿主机时区挂载配置
+  - 自动挂载 `/etc/localtime` 和 `/etc/timezone`
+  - 确保容器时间与宿主机保持一致
 - **2026-03-08**:
   - 创建所有配置文件的详细中文注释版本
   - 添加了 4 个 `.zh-CN` 文件

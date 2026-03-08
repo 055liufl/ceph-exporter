@@ -354,6 +354,11 @@ services:
     #   ⚠ 容器内的进程可能影响宿主机
     #   ⚠ 生产环境应评估安全风险
     #   ⚠ 考虑使用更细粒度的 capabilities 替代
+
+      # 时区配置挂载 (只读)
+      # 确保容器时间与宿主机一致
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     privileged: true
 
     # -------------------------------------------------------------------------

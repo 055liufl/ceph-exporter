@@ -307,6 +307,7 @@ init_data_dirs() {
 
     log_info "数据目录初始化完成"
     log_info "数据存储位置: $DEPLOY_DIR/data/"
+    log_info "时区配置: 所有容器已自动挂载宿主机时区 (/etc/localtime, /etc/timezone)"
 }
 
 # 部署最小监控栈
@@ -538,6 +539,19 @@ verify_deployment() {
             fi
         fi
     done
+    echo ""
+
+    # 验证时区配置
+    log_info "验证容器时区配置..."
+    if docker ps --format '{{.Names}}' | grep -q \"ceph-exporter\"; then
+        local host_tz=$(date +"%Z %z")
+        local container_tz=$(docker exec ceph-exporter date +"%Z %z" 2>/dev/null || echo "无法获取")
+        if [ "$host_tz" = "$container_tz" ]; then
+            echo -e "${GREEN}✓${NC} 容器时区与宿主机一致: $host_tz"
+        else
+            echo -e "${YELLOW}!${NC} 宿主机时区: $host_tz, 容器时区: $container_tz"
+        fi
+    fi
     echo ""
 }
 

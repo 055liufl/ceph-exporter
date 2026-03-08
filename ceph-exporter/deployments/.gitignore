@@ -1,2 +1,4 @@
 # Runtime data directories
 data/
+*.bak
+*.backup
