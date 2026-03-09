@@ -524,3 +524,211 @@ trusted-host=pypi.tuna.tsinghua.edu.cn
 4. **验证方法**: 使用 `which` 和 `--version` 命令验证配置是否生效
 
 🎉 **环境配置成功！**
+
+---
+
+# Ceph RGW 端口问题分析与解决方案
+
+## 📅 日期
+2026-03-10
+
+## 问题描述
+
+访问 `http://192.168.75.129:8080/` 时，浏览器返回以下 XML 响应：
+
+```xml
+<ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+<Owner>
+  <ID>anonymous</ID>
+  <DisplayName/>
+</Owner>
+<Buckets/>
+</ListAllMyBucketsResult>
+```
+
+## 问题分析
+
+### 响应含义
+
+这是一个标准的 **S3 API 响应**，表示：
+- **Owner**: 当前访问者是匿名用户（anonymous）
+- **Buckets**: 空的，表示没有任何 S3 存储桶
+
+### 根本原因
+
+端口 8080 上运行的是 **Ceph RGW (RADOS Gateway)** 服务，而不是 Ceph Dashboard。
+
+根据 `docker-compose-lightweight-full.yml` 配置：
+
+```yaml
+ceph-demo:
+  environment:
+    - RGW_CIVETWEB_PORT=8080  # RGW 绑定到 8080 端口
+    - DEMO_DAEMONS=mon,mgr,osd,rgw
+  ports:
+    - "8080:8080"  # 注释说是 Ceph Dashboard，但实际是 RGW
+    - "5000:5000"  # RGW 另一个端口
+```
+
+**配置问题**: `RGW_CIVETWEB_PORT=8080` 将 RGW 绑定到了 8080 端口，这与注释中说的 "Ceph Dashboard" 不符。
+
+### 服务说明
+
+- **RGW (RADOS Gateway)**: 提供 S3/Swift 兼容的对象存储 API，不是 Web 界面
+- **Ceph Dashboard**: Ceph 的 Web 管理界面，需要单独启用
+
+## 解决方案
+
+### 方案 1: 访问 Grafana 监控界面（推荐）
+
+Grafana 提供了更好的可视化监控界面：
+
+```bash
+# 访问地址
+http://192.168.75.129:3000
+
+# 默认账号密码
+用户名: admin
+密码: admin
+```
+
+**功能**:
+- 可视化 Ceph 集群监控数据
+- 预配置的 Ceph 监控仪表板
+- 实时指标图表和告警
+
+### 方案 2: 访问 Prometheus 原始指标
+
+```bash
+# ceph-exporter 指标端点
+http://192.168.75.129:9128/metrics
+
+# Prometheus 查询界面
+http://192.168.75.129:9090
+```
+
+**功能**:
+- 查看原始 Prometheus 指标
+- 执行 PromQL 查询
+- 查看告警规则
+
+### 方案 3: 使用 S3 客户端访问 RGW
+
+如果需要使用对象存储功能，可以使用 S3 客户端工具：
+
+#### 使用 AWS CLI
+
+```bash
+# 安装 AWS CLI
+pip install awscli
+
+# 配置
+aws configure
+# AWS Access Key ID: demo_access_key
+# AWS Secret Access Key: demo_secret_key
+# Default region name: us-east-1
+# Default output format: json
+
+# 使用自定义端点
+aws --endpoint-url=http://192.168.75.129:8080 s3 ls
+
+# 创建存储桶
+aws --endpoint-url=http://192.168.75.129:8080 s3 mb s3://my-bucket
+
+# 上传文件
+aws --endpoint-url=http://192.168.75.129:8080 s3 cp file.txt s3://my-bucket/
+```
+
+#### 使用 s3cmd
+
+```bash
+# 安装 s3cmd
+yum install s3cmd
+
+# 配置文件 ~/.s3cfg
+[default]
+access_key = demo_access_key
+secret_key = demo_secret_key
+host_base = 192.168.75.129:8080
+host_bucket = 192.168.75.129:8080
+use_https = False
+
+# 列出存储桶
+s3cmd ls
+
+# 创建存储桶
+s3cmd mb s3://my-bucket
+```
+
+### 方案 4: 启用真正的 Ceph Dashboard
+
+Ceph Dashboard 通常运行在 MGR 模块上，需要单独启用：
+
+```bash
+# 进入 ceph-demo 容器
+sudo docker exec -it ceph-demo bash
+
+# 启用 dashboard 模块
+ceph mgr module enable dashboard
+
+# 创建自签名证书（如果需要 HTTPS）
+ceph dashboard create-self-signed-cert
+
+# 创建管理员用户
+ceph dashboard ac-user-create admin password administrator
+
+# 查看 dashboard 访问地址
+ceph mgr services
+
+# 示例输出:
+# {
+#     "dashboard": "https://172.20.0.10:8443/"
+# }
+```
+
+**注意**: Dashboard 默认使用 HTTPS 和不同的端口（通常是 8443），需要修改 docker-compose 配置暴露该端口。
+
+## 端口映射总结
+
+| 端口 | 服务 | 说明 |
+|------|------|------|
+| 8080 | RGW | 对象存储 API（S3/Swift 兼容） |
+| 5000 | RGW | RGW 备用端口 |
+| 9128 | ceph-exporter | Prometheus 指标端点 |
+| 9090 | Prometheus | Prometheus 查询界面 |
+| 3000 | Grafana | 监控可视化界面（推荐） |
+| 5601 | Kibana | 日志查询界面 |
+| 16686 | Jaeger | 分布式追踪界面 |
+
+## 推荐访问方式
+
+1. **监控查看**: 访问 Grafana `http://192.168.75.129:3000`
+2. **指标查询**: 访问 Prometheus `http://192.168.75.129:9090`
+3. **对象存储**: 使用 S3 客户端连接 `http://192.168.75.129:8080`
+
+## 修复配置（可选）
+
+如果需要修改端口配置，编辑 `docker-compose-lightweight-full.yml`:
+
+```yaml
+ceph-demo:
+  environment:
+    - RGW_CIVETWEB_PORT=5000  # 将 RGW 改到 5000 端口
+    - DEMO_DAEMONS=mon,mgr,osd,rgw
+  ports:
+    - "5000:5000"  # RGW
+    - "8443:8443"  # Ceph Dashboard (需要先启用)
+```
+
+然后重启服务：
+
+```bash
+cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+sudo docker-compose -f docker-compose-lightweight-full.yml restart ceph-demo
+```
+
+## 相关文档
+
+- [Ceph RGW 文档](https://docs.ceph.com/en/latest/radosgw/)
+- [Ceph Dashboard 文档](https://docs.ceph.com/en/latest/mgr/dashboard/)
+- [S3 API 参考](https://docs.aws.amazon.com/AmazonS3/latest/API/)
