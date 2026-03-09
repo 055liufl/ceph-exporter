@@ -41,6 +41,14 @@ type MDSCollector struct {
 }
 
 // NewMDSCollector 创建 MDS 采集器实例
+// 初始化所有 MDS 相关的 Prometheus 指标描述符
+//
+// 参数:
+//   - client: Ceph 客户端实例，用于执行命令获取 MDS 数据
+//   - log: 日志实例，用于记录采集过程中的信息和错误
+//
+// 返回:
+//   - *MDSCollector: 初始化完成的 MDS 采集器实例
 func NewMDSCollector(client *ceph.Client, log *logger.Logger) *MDSCollector {
 	return &MDSCollector{
 		client: client,
@@ -65,6 +73,11 @@ func NewMDSCollector(client *ceph.Client, log *logger.Logger) *MDSCollector {
 }
 
 // Describe 向 Prometheus 注册本采集器提供的所有指标描述符
+// 实现 prometheus.Collector 接口的 Describe 方法
+// Prometheus 在注册采集器时会调用此方法，获取采集器提供的所有指标定义
+//
+// 参数:
+//   - ch: 指标描述符通道，用于发送指标描述符到 Prometheus
 func (c *MDSCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.activeTotal
 	ch <- c.standbyTotal
@@ -72,6 +85,24 @@ func (c *MDSCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect 执行 MDS 指标采集
+// 实现 prometheus.Collector 接口的 Collect 方法
+// Prometheus 定期调用此方法采集最新的指标数据
+//
+// MDS 状态说明:
+//   - up:active: MDS 正在提供元数据服务
+//   - up:standby: MDS 处于待命状态，可以接管 active MDS
+//   - up:standby-replay: MDS 处于待命状态，并实时重放日志
+//
+// 采集流程:
+//  1. 创建带超时的上下文
+//  2. 调用 Ceph 客户端获取所有 MDS 的状态数据
+//  3. 统计 active 和 standby 状态的 MDS 数量
+//  4. 为每个 MDS 守护进程生成带 name 和 state 标签的指标
+//  5. 生成汇总指标（active_total 和 standby_total）
+//  6. 通过 channel 发送指标到 Prometheus
+//
+// 参数:
+//   - ch: 指标通道，用于发送采集到的指标数据到 Prometheus
 func (c *MDSCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := newCollectContext()
 	defer cancel()

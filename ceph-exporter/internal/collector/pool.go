@@ -56,6 +56,14 @@ type PoolCollector struct {
 }
 
 // NewPoolCollector 创建存储池采集器实例
+// 初始化所有存储池相关的 Prometheus 指标描述符
+//
+// 参数:
+//   - client: Ceph 客户端实例，用于执行命令获取存储池数据
+//   - log: 日志实例，用于记录采集过程中的信息和错误
+//
+// 返回:
+//   - *PoolCollector: 初始化完成的存储池采集器实例
 func NewPoolCollector(client *ceph.Client, log *logger.Logger) *PoolCollector {
 	// 所有存储池指标都带有 pool 标签，用于区分不同的存储池
 	poolLabels := []string{"pool"}
@@ -113,6 +121,11 @@ func NewPoolCollector(client *ceph.Client, log *logger.Logger) *PoolCollector {
 }
 
 // Describe 向 Prometheus 注册本采集器提供的所有指标描述符
+// 实现 prometheus.Collector 接口的 Describe 方法
+// Prometheus 在注册采集器时会调用此方法，获取采集器提供的所有指标定义
+//
+// 参数:
+//   - ch: 指标描述符通道，用于发送指标描述符到 Prometheus
 func (c *PoolCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.storedBytes
 	ch <- c.maxAvailBytes
@@ -126,19 +139,33 @@ func (c *PoolCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect 执行存储池指标采集
+// 实现 prometheus.Collector 接口的 Collect 方法
+// Prometheus 定期调用此方法采集最新的指标数据
 // 遍历所有存储池，为每个池生成一组带 pool 标签的指标
+//
+// 采集流程:
+//  1. 创建带超时的上下文
+//  2. 调用 Ceph 客户端获取所有存储池的统计数据
+//  3. 遍历每个存储池，生成对应的 Prometheus 指标
+//  4. 通过 channel 发送指标到 Prometheus
+//
+// 参数:
+//   - ch: 指标通道，用于发送采集到的指标数据到 Prometheus
 func (c *PoolCollector) Collect(ch chan<- prometheus.Metric) {
+	// 创建带超时的上下文，防止采集操作阻塞过久
 	ctx, cancel := newCollectContext()
 	defer cancel()
 
+	// 从 Ceph 获取所有存储池的统计数据
 	pools, err := c.client.GetPoolStats(ctx)
 	if err != nil {
 		c.log.WithComponent("pool-collector").Errorf("获取存储池统计失败: %v", err)
 		return
 	}
 
+	// 遍历每个存储池，生成指标
 	for _, pool := range pools {
-		// 每个存储池的指标都带有 pool=<pool_name> 标签
+		// 每个存储池的指标都带有 pool=<pool_name> 标签，用于区分不同的存储池
 		ch <- prometheus.MustNewConstMetric(c.storedBytes, prometheus.GaugeValue,
 			float64(pool.Stats.Stored), pool.PoolName)
 		ch <- prometheus.MustNewConstMetric(c.maxAvailBytes, prometheus.GaugeValue,

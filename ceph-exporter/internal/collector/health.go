@@ -46,6 +46,14 @@ type HealthCollector struct {
 }
 
 // NewHealthCollector 创建健康状态采集器实例
+// 初始化所有健康状态相关的 Prometheus 指标描述符
+//
+// 参数:
+//   - client: Ceph 客户端实例，用于执行命令获取集群健康状态数据
+//   - log: 日志实例，用于记录采集过程中的信息和错误
+//
+// 返回:
+//   - *HealthCollector: 初始化完成的健康状态采集器实例
 func NewHealthCollector(client *ceph.Client, log *logger.Logger) *HealthCollector {
 	return &HealthCollector{
 		client: client,
@@ -75,6 +83,11 @@ func NewHealthCollector(client *ceph.Client, log *logger.Logger) *HealthCollecto
 }
 
 // Describe 向 Prometheus 注册本采集器提供的所有指标描述符
+// 实现 prometheus.Collector 接口的 Describe 方法
+// Prometheus 在注册采集器时会调用此方法，获取采集器提供的所有指标定义
+//
+// 参数:
+//   - ch: 指标描述符通道，用于发送指标描述符到 Prometheus
 func (c *HealthCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.status
 	ch <- c.statusInfo
@@ -83,6 +96,31 @@ func (c *HealthCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect 执行健康状态指标采集
+// 实现 prometheus.Collector 接口的 Collect 方法
+// Prometheus 定期调用此方法采集最新的指标数据
+//
+// 健康状态说明:
+//   - HEALTH_OK (0): 集群完全健康，无任何问题
+//   - HEALTH_WARN (1): 集群有警告，但仍可正常工作
+//   - HEALTH_ERR (2): 集群有错误，可能影响数据可用性
+//
+// 健康检查项示例:
+//   - TOO_FEW_OSDS: OSD 数量不足
+//   - OSD_DOWN: 有 OSD 处于 down 状态
+//   - PG_DEGRADED: 有 PG 处于降级状态
+//   - MON_CLOCK_SKEW: Monitor 时钟偏移过大
+//
+// 采集流程:
+//  1. 创建带超时的上下文
+//  2. 调用 Ceph 客户端获取集群状态（包含健康信息）
+//  3. 生成健康状态码指标（数值型，便于告警规则）
+//  4. 生成健康状态信息指标（带标签，便于 Grafana 展示）
+//  5. 生成健康检查项总数指标
+//  6. 为每个健康检查项生成带 name 和 severity 标签的指标
+//  7. 通过 channel 发送指标到 Prometheus
+//
+// 参数:
+//   - ch: 指标通道，用于发送采集到的指标数据到 Prometheus
 func (c *HealthCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := newCollectContext()
 	defer cancel()
