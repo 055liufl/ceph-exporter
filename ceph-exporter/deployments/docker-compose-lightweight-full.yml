@@ -43,8 +43,8 @@ services:
       - RGW_CIVETWEB_PORT=8080
       - DEMO_DAEMONS=mon,mgr,osd,rgw
     ports:
-      - "8080:8080"  # Ceph Dashboard
-      - "5000:5000"  # RGW
+      - "8080:8080"  # RGW (RADOS Gateway) - S3/Swift 对象存储 API
+      - "5000:5000"  # RGW 备用端口
     networks:
       ceph-network:
         ipv4_address: 172.20.0.10
