@@ -1,0 +1,41 @@
+# 排除部署相关的数据目录
+deployments/data/
+deployments/*/data/
+
+# 排除构建产物
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 排除测试缓存
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# 排除 IDE 配置
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 排除 Git
+.git/
+.gitignore
+
+# 排除文档（构建时不需要）
+*.md
+!README.md
+
+# 排除临时文件
+tmp/
+temp/
+*.tmp
+*.log
+
+# 排除 Docker 相关
+docker-compose*.yml
+Dockerfile.*
