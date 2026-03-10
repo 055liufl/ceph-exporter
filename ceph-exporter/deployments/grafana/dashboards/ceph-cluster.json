@@ -307,11 +307,11 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Up" },
+            "matcher": { "id": "byName", "options": "在线" },
             "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
           },
           {
-            "matcher": { "id": "byName", "options": "Down" },
+            "matcher": { "id": "byName", "options": "离线" },
             "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
           }
         ]
@@ -325,8 +325,8 @@
       "title": "OSD Up/Down 趋势",
       "type": "timeseries",
       "targets": [
-        { "expr": "ceph_cluster_osds_up", "legendFormat": "Up", "refId": "A" },
-        { "expr": "ceph_cluster_osds_total - ceph_cluster_osds_up", "legendFormat": "Down", "refId": "B" }
+        { "expr": "ceph_cluster_osds_up", "legendFormat": "在线", "refId": "A" },
+        { "expr": "ceph_cluster_osds_total - ceph_cluster_osds_up", "legendFormat": "离线", "refId": "B" }
       ]
     },
     {
@@ -351,7 +351,7 @@
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "title": "OSD Apply Latency",
+      "title": "OSD 应用延迟",
       "type": "timeseries",
       "targets": [
         { "expr": "ceph_osd_apply_latency_ms", "legendFormat": "OSD {{ osd }}", "refId": "A" }
@@ -379,7 +379,7 @@
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "title": "OSD Commit Latency",
+      "title": "OSD 提交延迟",
       "type": "timeseries",
       "targets": [
         { "expr": "ceph_osd_commit_latency_ms", "legendFormat": "OSD {{ osd }}", "refId": "A" }
@@ -537,8 +537,8 @@
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "options": { "0": { "color": "red", "text": "Out" } }, "type": "value" },
-            { "options": { "1": { "color": "green", "text": "In Quorum" } }, "type": "value" }
+            { "options": { "0": { "color": "red", "text": "离线" } }, "type": "value" },
+            { "options": { "1": { "color": "green", "text": "在 Quorum 中" } }, "type": "value" }
           ],
           "thresholds": {
             "mode": "absolute",
