@@ -15,19 +15,112 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    echo -e "${GREEN}[信息]${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${YELLOW}[警告]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[错误]${NC} $1"
 }
 
 log_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
+    echo -e "${BLUE}[步骤]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+# 检查中文配置
+check_chinese_config() {
+    log_step "检查中文界面配置..."
+    echo ""
+
+    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
+
+    # 检查配置文件是否存在
+    local config_files=(
+        "$DEPLOY_DIR/grafana/dashboards/ceph-cluster.json:Grafana Dashboard"
+        "$DEPLOY_DIR/prometheus/prometheus.zh-CN.yml:Prometheus 中文配置"
+        "$DEPLOY_DIR/prometheus/alert_rules.zh-CN.yml:告警规则中文配置"
+        "$DEPLOY_DIR/alertmanager/alertmanager.zh-CN.yml:Alertmanager 中文配置"
+    )
+
+    local all_exist=true
+    for item in "${config_files[@]}"; do
+        local file="${item%%:*}"
+        local desc="${item#*:}"
+
+        if [ -f "$file" ]; then
+            print_success "$desc 存在"
+        else
+            print_warning "$desc 不存在: $file"
+            all_exist=false
+        fi
+    done
+
+    echo ""
+
+    # 检查 Docker Compose 中文配置
+    local compose_files=(
+        "$DEPLOY_DIR/docker-compose.yml:标准部署"
+        "$DEPLOY_DIR/docker-compose-lightweight-full.yml:完整测试环境"
+        "$DEPLOY_DIR/docker-compose-integration-test.yml:集成测试"
+    )
+
+    for item in "${compose_files[@]}"; do
+        local file="${item%%:*}"
+        local desc="${item#*:}"
+
+        if [ ! -f "$file" ]; then
+            continue
+        fi
+
+        # 检查 Grafana 中文配置
+        if grep -q "GF_DEFAULT_LOCALE=zh-CN" "$file"; then
+            print_success "$desc: Grafana 中文语言配置正确"
+        else
+            print_warning "$desc: Grafana 缺少中文语言配置"
+        fi
+
+        # 检查 Prometheus 中文配置文件引用
+        if grep -q "prometheus.zh-CN.yml" "$file"; then
+            print_success "$desc: Prometheus 使用中文配置文件"
+        else
+            print_warning "$desc: Prometheus 可能未使用中文配置文件"
+        fi
+    done
+
+    echo ""
+
+    # 检查运行中服务的中文配置
+    if command -v docker &> /dev/null; then
+        if docker ps | grep -q "grafana"; then
+            if docker exec grafana env 2>/dev/null | grep -q "GF_DEFAULT_LOCALE=zh-CN"; then
+                print_success "Grafana 运行时中文配置正确"
+            else
+                print_warning "Grafana 运行时可能未设置中文语言"
+            fi
+        fi
+
+        if docker ps | grep -q "prometheus"; then
+            if docker exec prometheus cat /etc/prometheus/prometheus.yml 2>/dev/null | grep -q "集群"; then
+                print_success "Prometheus 使用中文配置文件"
+            else
+                print_warning "Prometheus 可能未使用中文配置文件"
+            fi
+        fi
+    fi
+
+    echo ""
 }
 
 # 检查容器状态
@@ -309,50 +402,74 @@ show_access_info() {
     # 获取服务器 IP
     local server_ip=$(hostname -I | awk '{print $1}')
 
-    echo "本地访问:"
-    echo "  Ceph Exporter:   http://localhost:9128/metrics"
-    echo "  Prometheus:      http://localhost:9090"
-    echo "  Grafana:         http://localhost:3000 (admin/admin)"
-    echo "  Alertmanager:    http://localhost:9093"
+    echo -e "${GREEN}本地访问：${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${BLUE}📊 Grafana 监控仪表盘（中文）：${NC}"
+    echo "   http://localhost:3000"
+    echo "   账号：admin / admin"
+    echo ""
+    echo -e "${BLUE}📈 Prometheus 指标查询：${NC}"
+    echo "   http://localhost:9090"
+    echo ""
+    echo -e "${BLUE}🔔 Alertmanager 告警管理（中文）：${NC}"
+    echo "   http://localhost:9093"
+    echo ""
+    echo -e "${BLUE}🔌 Ceph Exporter：${NC}"
+    echo "   http://localhost:9128/metrics"
+    echo ""
 
     if docker ps --format '{{.Names}}' | grep -q "elasticsearch"; then
-        echo "  Elasticsearch:   http://localhost:9200"
-        echo "  Kibana:          http://localhost:5601"
-        echo "  Jaeger UI:       http://localhost:16686"
+        echo -e "${BLUE}📋 Kibana 日志分析（中文）：${NC}"
+        echo "   http://localhost:5601"
+        echo ""
+        echo -e "${BLUE}🔍 Jaeger 链路追踪：${NC}"
+        echo "   http://localhost:16686"
+        echo ""
+        echo -e "${BLUE}🔌 Elasticsearch：${NC}"
+        echo "   http://localhost:9200"
+        echo ""
     fi
 
     if docker ps --format '{{.Names}}' | grep -q "ceph-demo"; then
-        echo "  Ceph Dashboard:  http://localhost:8080"
+        echo -e "${BLUE}🗄️  Ceph Dashboard：${NC}"
+        echo "   http://localhost:8080"
+        echo ""
     fi
 
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "远程访问 (服务器 IP: $server_ip):"
-    echo "  Ceph Exporter:   http://${server_ip}:9128/metrics"
+    echo -e "${GREEN}远程访问（服务器 IP: $server_ip）：${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Grafana:         http://${server_ip}:3000"
     echo "  Prometheus:      http://${server_ip}:9090"
-    echo "  Grafana:         http://${server_ip}:3000 (admin/admin)"
     echo "  Alertmanager:    http://${server_ip}:9093"
+    echo "  Ceph Exporter:   http://${server_ip}:9128/metrics"
 
     if docker ps --format '{{.Names}}' | grep -q "elasticsearch"; then
-        echo "  Elasticsearch:   http://${server_ip}:9200"
         echo "  Kibana:          http://${server_ip}:5601"
         echo "  Jaeger UI:       http://${server_ip}:16686"
+        echo "  Elasticsearch:   http://${server_ip}:9200"
     fi
 
     if docker ps --format '{{.Names}}' | grep -q "ceph-demo"; then
         echo "  Ceph Dashboard:  http://${server_ip}:8080"
     fi
 
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "所有服务已配置中文界面支持"
     echo ""
 }
 
 # 主函数
 main() {
     echo ""
-    echo "=========================================="
-    echo "ceph-exporter 部署验证"
-    echo "=========================================="
+    echo "==========================================="
+    echo "  Ceph Exporter 部署验证"
+    echo "==========================================="
     echo ""
 
+    check_chinese_config
     check_containers
     check_endpoints
     check_prometheus_targets

@@ -20,19 +20,28 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    echo -e "${GREEN}[信息]${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${YELLOW}[警告]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[错误]${NC} $1"
 }
 
 log_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
+    echo -e "${BLUE}[步骤]${NC} $1"
+}
+
+# 打印横幅
+print_banner() {
+    echo -e "${GREEN}"
+    echo "=============================================="
+    echo "  Ceph Exporter 中文监控系统"
+    echo "=============================================="
+    echo -e "${NC}"
 }
 
 # 检查是否为 root 用户
@@ -406,11 +415,24 @@ deploy_full() {
 show_access_info_minimal() {
     log_step "服务访问信息:"
     echo ""
-    echo "监控服务:"
-    echo "  Ceph Exporter:   http://localhost:9128/metrics"
-    echo "  Prometheus:      http://localhost:9090"
-    echo "  Grafana:         http://localhost:3000 (admin/admin)"
-    echo "  Alertmanager:    http://localhost:9093"
+    echo -e "${GREEN}访问地址：${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${BLUE}📊 Grafana 监控仪表盘（中文）：${NC}"
+    echo "   http://localhost:3000"
+    echo "   账号：admin / admin"
+    echo ""
+    echo -e "${BLUE}📈 Prometheus 指标查询：${NC}"
+    echo "   http://localhost:9090"
+    echo ""
+    echo -e "${BLUE}🔔 Alertmanager 告警管理（中文）：${NC}"
+    echo "   http://localhost:9093"
+    echo ""
+    echo -e "${BLUE}🔌 Ceph Exporter：${NC}"
+    echo "   http://localhost:9128/metrics"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "提示：首次启动可能需要 1-2 分钟初始化"
     echo ""
 }
 
@@ -418,35 +440,62 @@ show_access_info_minimal() {
 show_access_info_integration() {
     log_step "服务访问信息:"
     echo ""
-    echo "Ceph 服务:"
-    echo "  Ceph Dashboard:  http://localhost:8080"
+    echo -e "${GREEN}访问地址：${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${BLUE}🗄️  Ceph Dashboard：${NC}"
+    echo "   http://localhost:8080"
     echo ""
-    echo "监控服务:"
-    echo "  Ceph Exporter:   http://localhost:9128/metrics"
-    echo "  Prometheus:      http://localhost:9090"
-    echo "  Grafana:         http://localhost:3000 (admin/admin)"
+    echo -e "${BLUE}📊 Grafana 监控仪表盘（中文）：${NC}"
+    echo "   http://localhost:3000"
+    echo "   账号：admin / admin"
+    echo ""
+    echo -e "${BLUE}📈 Prometheus 指标查询：${NC}"
+    echo "   http://localhost:9090"
+    echo ""
+    echo -e "${BLUE}🔌 Ceph Exporter：${NC}"
+    echo "   http://localhost:9128/metrics"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "提示：首次启动可能需要 1-2 分钟初始化"
     echo ""
 }
 
 # 显示访问信息（完整栈）
 show_access_info_full() {
-    log_step "服务访问信息:"
+    log_step "服务启动成功！"
     echo ""
-    echo "Ceph 服务:"
-    echo "  Ceph Dashboard:  http://localhost:8080"
+    echo -e "${GREEN}访问地址：${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${BLUE}🗄️  Ceph Dashboard：${NC}"
+    echo "   http://localhost:8080"
     echo ""
-    echo "监控服务:"
-    echo "  Ceph Exporter:   http://localhost:9128/metrics"
-    echo "  Prometheus:      http://localhost:9090"
-    echo "  Grafana:         http://localhost:3000 (admin/admin)"
-    echo "  Alertmanager:    http://localhost:9093"
+    echo -e "${BLUE}📊 Grafana 监控仪表盘（中文）：${NC}"
+    echo "   http://localhost:3000"
+    echo "   账号：admin / admin"
     echo ""
-    echo "日志服务:"
-    echo "  Elasticsearch:   http://localhost:9200"
-    echo "  Kibana:          http://localhost:5601"
+    echo -e "${BLUE}📈 Prometheus 指标查询：${NC}"
+    echo "   http://localhost:9090"
     echo ""
-    echo "追踪服务:"
-    echo "  Jaeger UI:       http://localhost:16686"
+    echo -e "${BLUE}🔔 Alertmanager 告警管理（中文）：${NC}"
+    echo "   http://localhost:9093"
+    echo ""
+    echo -e "${BLUE}📋 Kibana 日志分析（中文）：${NC}"
+    echo "   http://localhost:5601"
+    echo ""
+    echo -e "${BLUE}🔍 Jaeger 链路追踪：${NC}"
+    echo "   http://localhost:16686"
+    echo ""
+    echo -e "${BLUE}🔌 Elasticsearch：${NC}"
+    echo "   http://localhost:9200"
+    echo ""
+    echo -e "${BLUE}🔌 Ceph Exporter：${NC}"
+    echo "   http://localhost:9128/metrics"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "提示：首次启动可能需要 1-2 分钟初始化"
+    log_info "所有服务已配置中文界面，包括 Grafana、Prometheus 告警、Alertmanager"
     echo ""
 }
 
@@ -603,20 +652,20 @@ clean_data() {
 
 # 显示帮助
 show_help() {
+    print_banner
     cat << 'EOF'
-ceph-exporter 部署脚本
 
 用法:
-  ./deploy.sh <command>
+  ./deploy.sh <命令>
 
 命令:
   check           检查系统环境（Docker、资源、防火墙等）
   mirror          配置 Docker 镜像加速器
   pull            预拉取所有镜像
   init            初始化数据目录（创建目录并设置权限）
-  minimal         部署最小监控栈
-  integration     部署集成测试环境
-  full            部署完整轻量级栈（推荐）
+  minimal         部署最小监控栈（标准部署，需要现有 Ceph 集群）
+  integration     部署集成测试环境（包含 Ceph Demo）
+  full            部署完整轻量级栈（包含 Ceph Demo + ELK + Jaeger，推荐）
   status          查看服务状态
   logs [service]  查看日志（可指定服务名）
   verify          验证部署状态
@@ -626,9 +675,23 @@ ceph-exporter 部署脚本
   clean           停止服务并清除数据
   help            显示此帮助信息
 
+别名（为了兼容性）:
+  standard        等同于 minimal（标准部署）
+  test            等同于 integration（集成测试）
+
 示例:
-  # 完整部署（推荐）
+  # 完整部署（推荐，包含中文界面）
   ./deploy.sh full
+
+  # 标准部署（连接现有 Ceph 集群）
+  ./deploy.sh minimal
+  # 或
+  ./deploy.sh standard
+
+  # 集成测试环境
+  ./deploy.sh integration
+  # 或
+  ./deploy.sh test
 
   # 检查环境
   ./deploy.sh check
@@ -650,6 +713,13 @@ ceph-exporter 部署脚本
 
   # 修复部署问题
   ./deploy.sh fix
+
+中文界面支持:
+  所有部署模式都已配置中文界面，包括：
+  - Grafana 监控仪表盘（中文界面和 Dashboard）
+  - Prometheus 告警规则（中文描述）
+  - Alertmanager 告警管理（中文配置）
+  - Kibana 日志分析（中文界面支持）
 
 故障排查:
   如果遇到部署问题，请查看:
@@ -690,13 +760,13 @@ main() {
         init)
             init_data_dirs
             ;;
-        minimal)
+        minimal|standard)
             full_check
             configure_mirror
             deploy_minimal
             verify_deployment
             ;;
-        integration)
+        integration|test)
             full_check
             configure_mirror
             pull_images
