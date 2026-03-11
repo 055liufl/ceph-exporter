@@ -110,3 +110,21 @@ scrape_configs:
           - "alertmanager:9093"
         labels:
           service: "alertmanager"
+
+  # ---------------------------------------------------------------------------
+  # Grafana 监控
+  # ---------------------------------------------------------------------------
+  # 采集 Grafana 运行指标（仪表板数量、用户数量、API 性能等）
+  - job_name: "grafana"
+
+    scrape_interval: 30s
+
+    scrape_timeout: 10s
+
+    metrics_path: /metrics
+
+    static_configs:
+      - targets:
+          - "grafana:3000"
+        labels:
+          service: "grafana"

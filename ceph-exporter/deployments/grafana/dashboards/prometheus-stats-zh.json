@@ -49,7 +49,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
       "id": 1,
       "options": {
-        "legend": { "calcs": ["最新值", "平均值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "追加的样本数",
@@ -84,7 +84,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
       "id": 2,
       "options": {
-        "legend": { "calcs": ["最新值", "最大值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "采集持续时间",
@@ -129,7 +129,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
       "id": 3,
       "options": {
-        "legend": { "calcs": ["最新值", "最大值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "内存概况",
@@ -181,7 +181,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
       "id": 4,
       "options": {
-        "legend": { "calcs": ["最新值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "活跃追加器",
@@ -221,7 +221,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
       "id": 5,
       "options": {
-        "legend": { "calcs": ["最新值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "已加载的块",
@@ -256,7 +256,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
       "id": 6,
       "options": {
-        "legend": { "calcs": ["最新值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "头部块",
@@ -298,7 +298,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
       "id": 7,
       "options": {
-        "legend": { "calcs": ["最新值", "总计"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull", "sum"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "压缩活动",
@@ -343,7 +343,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
       "id": 8,
       "options": {
-        "legend": { "calcs": ["最新值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "重载次数",
@@ -390,7 +390,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
       "id": 9,
       "options": {
-        "legend": { "calcs": ["最新值", "平均值", "最大值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull", "mean", "max"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "查询持续时间",
@@ -440,7 +440,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
       "id": 10,
       "options": {
-        "legend": { "calcs": ["最新值", "平均值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "规则组评估持续时间",
@@ -475,7 +475,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
       "id": 11,
       "options": {
-        "legend": { "calcs": ["最新值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "规则组评估活动",
@@ -556,7 +556,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
       "id": 13,
       "options": {
-        "legend": { "calcs": ["最新值"], "displayMode": "table", "placement": "bottom" },
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "头部块 GC 活动",

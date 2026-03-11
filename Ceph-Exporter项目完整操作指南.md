@@ -1,7 +1,7 @@
 # Ceph-Exporter 项目完整操作指南
 
-> **版本**: 1.0
-> **最后更新**: 2026-03-11
+> **版本**: 2.0
+> **最后更新**: 2026-03-12
 > **适用环境**: CentOS 7 + Docker
 
 ---
@@ -208,7 +208,365 @@ curl http://localhost:3000          # Grafana
 ---
 
 
-## 核心服务详解（续）
+## 核心服务详解
+
+### Ceph-Exporter 服务
+
+#### 服务说明
+
+Ceph-Exporter 是本项目的核心组件，负责从 Ceph 集群采集指标并以 Prometheus 格式暴露。
+
+- **访问地址**: http://localhost:9128/metrics
+- **健康检查**: http://localhost:9128/health
+- **容器名称**: ceph-exporter
+- **镜像**: ceph-exporter:dev
+
+#### 采集器列表（7 个）
+
+| 采集器 | 说明 | 主要指标 |
+|--------|------|----------|
+| Cluster | 集群整体状态 | 总容量、已用容量、可用容量、OSD 数量 |
+| Pool | 存储池信息 | 存储池容量、对象数、读写速率 |
+| OSD | OSD 状态 | OSD 在线/离线、延迟、使用率 |
+| Monitor | Monitor 状态 | Quorum 状态、时钟偏差 |
+| Health | 健康状态 | 集群健康状态（OK/WARN/ERR） |
+| MDS | 元数据服务器 | MDS 状态、活跃数量 |
+| RGW | 对象网关 | RGW 状态、请求统计 |
+
+#### 常用操作
+
+```bash
+# 查看所有指标
+curl http://localhost:9128/metrics
+
+# 过滤特定指标
+curl -s http://localhost:9128/metrics | grep ceph_health
+
+# 查看指标数量
+curl -s http://localhost:9128/metrics | grep -c "^ceph_"
+
+# 健康检查
+curl http://localhost:9128/health
+# 预期输出: {"status":"ok"}
+
+# 查看日志
+docker logs ceph-exporter --tail 100
+
+# 实时跟踪日志
+docker logs -f ceph-exporter
+
+# 重启服务
+docker-compose restart ceph-exporter
+```
+
+#### 配置文件
+
+配置文件位置: `configs/ceph-exporter.yaml`
+
+```yaml
+server:
+  address: ":9128"          # 监听地址
+  read_timeout: 30s         # 读取超时
+  write_timeout: 30s        # 写入超时
+
+ceph:
+  config_file: "/etc/ceph/ceph.conf"           # Ceph 配置文件
+  keyring_file: "/etc/ceph/ceph.client.admin.keyring"  # 密钥环文件
+  user: "admin"             # Ceph 用户
+
+logger:
+  level: "info"             # 日志级别: debug, info, warn, error
+  format: "json"            # 日志格式: json, text
+  output: "stdout"          # 输出: stdout, stderr, file
+
+tracer:
+  enabled: true             # 是否启用追踪
+  endpoint: "jaeger:4318"   # Jaeger 端点
+```
+
+#### 常见问题
+
+**问题: 连接 Ceph 失败 (Permission denied)**
+```bash
+# 症状: rados: ret=-13, Permission denied
+
+# 解决:
+# 1. 检查 Ceph 集群是否运行
+docker ps | grep ceph-demo
+
+# 2. 修复 keyring 权限
+sudo chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
+
+# 3. 重启
+docker-compose restart ceph-exporter
+```
+
+**问题: 指标为空**
+```bash
+# 检查 Ceph 集群状态
+docker exec ceph-demo ceph -s
+
+# 检查 exporter 日志
+docker logs ceph-exporter --tail 50
+```
+
+---
+
+### Prometheus 监控服务
+
+#### 服务说明
+
+Prometheus 是开源的监控和告警系统，负责采集、存储和查询时序数据。
+
+- **访问地址**: http://localhost:9090
+- **容器名称**: prometheus
+- **镜像**: prom/prometheus:v2.51.0
+- **数据保留**: 7 天（可配置）
+
+#### 界面导航
+
+**1. Graph（图表查询）** — 顶部菜单 → Graph
+- Expression: 输入 PromQL 查询语句
+- Execute: 执行查询
+- Table/Graph: 切换表格/图表视图
+
+**2. Alerts（告警规则）** — 顶部菜单 → Alerts
+- 🟢 Inactive（未激活）: 告警条件未满足
+- 🟡 Pending（待定）: 告警条件满足，等待触发
+- 🔴 Firing（触发中）: 告警已触发
+
+**3. Status → Targets（采集目标）** ⭐ 最常用
+- 🟢 UP: 采集成功，目标正常
+- 🔴 DOWN: 采集失败，目标不可达
+
+**4. Status → Configuration（配置）** — 查看当前加载的配置
+
+**5. Status → Rules（规则）** — 查看所有告警规则详情
+
+#### 采集目标
+
+Prometheus 配置了以下 4 个采集目标（定义在 `prometheus.zh-CN.yml` 中）：
+
+| 目标 | 地址 | 采集间隔 | 说明 |
+|------|------|----------|------|
+| ceph-exporter | ceph-exporter:9128 | 15s | Ceph 集群指标 |
+| prometheus | localhost:9090 | 15s | Prometheus 自身指标 |
+| alertmanager | alertmanager:9093 | 30s | Alertmanager 指标 |
+| grafana | grafana:3000 | 30s | Grafana 运行指标 |
+
+#### 常用 PromQL 查询
+
+```promql
+# === 集群状态 ===
+ceph_health_status                                          # 健康状态 (0=OK, 1=WARN, 2=ERR)
+ceph_cluster_total_bytes                                    # 集群总容量
+ceph_cluster_used_bytes                                     # 已用容量
+(ceph_cluster_used_bytes / ceph_cluster_total_bytes) * 100  # 使用率(%)
+
+# === OSD 状态 ===
+ceph_cluster_osds_up                                        # 在线 OSD 数量
+ceph_cluster_osds_total                                     # OSD 总数
+ceph_osd_apply_latency_ms                                   # OSD 应用延迟
+ceph_osd_commit_latency_ms                                  # OSD 提交延迟
+
+# === 存储池 ===
+ceph_pool_used_bytes                                        # 存储池已用容量
+ceph_pool_objects_total                                     # 存储池对象总数
+sum by (pool) (rate(ceph_pool_read_bytes[5m]))              # 读取速率
+
+# === Monitor ===
+ceph_monitor_in_quorum                                      # Monitor Quorum 状态
+ceph_monitor_clock_skew_seconds                             # 时钟偏差
+
+# === Grafana 指标 ===
+grafana_build_info                                          # Grafana 版本信息
+grafana_stat_totals_dashboard                               # 仪表板数量
+grafana_stat_totals_user                                    # 用户数量
+```
+
+#### 常用操作
+
+```bash
+# 检查采集目标状态
+curl -s http://localhost:9090/api/v1/targets | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for t in data.get('data',{}).get('activeTargets',[]):
+    print(f\"{t['labels']['job']:20s} {t['health']:6s}\")
+"
+
+# 执行查询
+curl -s 'http://localhost:9090/api/v1/query?query=ceph_health_status'
+
+# 重新加载配置（无需重启，需要 --web.enable-lifecycle 参数）
+curl -X POST http://localhost:9090/-/reload
+
+# 验证配置文件
+docker exec prometheus promtool check config /etc/prometheus/prometheus.yml
+
+# 验证告警规则
+docker exec prometheus promtool check rules /etc/prometheus/alert_rules.yml
+```
+
+#### 告警规则
+
+| 告警名称 | 中文说明 | 触发条件 | 级别 |
+|---------|---------|---------|------|
+| CephClusterWarning | 集群 HEALTH_WARN | health_status == 1 | warning |
+| CephClusterError | 集群 HEALTH_ERR | health_status == 2 | critical |
+| CephOSDDown | OSD 宕机 | osd_up < osd_total | warning |
+| CephOSDHighUtilization | OSD 使用率过高 | utilization > 85% | warning |
+| CephOSDHighLatency | OSD 延迟过高 | latency > 500ms | warning |
+| CephMultipleOSDDown | 超过 10% OSD 宕机 | down/total > 0.1 | critical |
+| CephClusterCapacityWarning | 容量超过 75% | used/total > 0.75 | warning |
+| CephClusterCapacityCritical | 容量超过 85% | used/total > 0.85 | critical |
+| CephClusterCapacityEmergency | 容量超过 95% | used/total > 0.95 | emergency |
+| CephPGNotClean | PG 非正常状态 | pg_not_clean > 0 | warning |
+| CephMonitorOutOfQuorum | Monitor 脱离 quorum | in_quorum < total | critical |
+| CephExporterDown | Exporter 不可用 | up == 0 | critical |
+
+#### 常见问题
+
+**问题: Targets 显示 DOWN (no such host)**
+```bash
+# 原因: 目标容器未运行或不在同一 Docker 网络
+
+# 解决:
+# 1. 检查容器状态
+sudo docker-compose -f docker-compose-lightweight-full.yml ps
+
+# 2. 重启所有服务
+sudo docker-compose -f docker-compose-lightweight-full.yml restart
+
+# 3. 验证
+curl http://localhost:9090/targets
+```
+
+**问题: 配置修改后不生效**
+```bash
+# 注意: Docker 挂载的是 prometheus.zh-CN.yml，不是 prometheus.yml
+# 修改正确的文件:
+vi prometheus/prometheus.zh-CN.yml
+
+# 重新加载
+curl -X POST http://localhost:9090/-/reload
+```
+
+---
+
+### Grafana 可视化服务
+
+#### 服务说明
+
+Grafana 是开源的可视化和分析平台，提供完整的中文界面，是日常监控的主要工具。
+
+- **访问地址**: http://localhost:3000
+- **默认账号**: admin / admin
+- **界面语言**: 简体中文（通过 `GF_DEFAULT_LOCALE=zh-CN` 配置）
+- **容器名称**: grafana
+- **镜像**: grafana/grafana:10.4.0
+
+#### 预置中文仪表板
+
+本项目提供 3 个完全中文化的 Grafana 仪表板：
+
+| 仪表板文件 | 名称 | 用途 |
+|-----------|------|------|
+| `ceph-cluster.json` | Ceph 集群监控 | Ceph 集群状态、容量、OSD、存储池监控 |
+| `prometheus-stats-zh.json` | Prometheus 2.0 运行状态（中文版） | Prometheus 自身性能监控 |
+| `grafana-metrics-zh.json` | Grafana 指标监控（中文版） | Grafana 自身运行状态监控 |
+
+#### Ceph 集群监控仪表板
+
+访问路径: 仪表盘 → 浏览 → Ceph → Ceph 集群监控
+
+**面板说明**:
+
+1. **集群概览**: 健康状态、总容量、已用容量、使用率、OSD 总数、PG 总数
+2. **容量趋势**: 总容量/已用容量/可用容量趋势图、使用率趋势图
+3. **OSD 状态**: Up/Down 趋势、应用延迟、提交延迟、使用率
+4. **存储池**: 已用容量、对象数、读/写吞吐量
+5. **Monitor 状态**: Quorum 状态、时钟偏差
+6. **PG 状态**: PG 状态分布（active+clean, degraded 等）
+7. **Exporter 状态**: 采集耗时、采集样本数
+
+#### Prometheus 运行状态仪表板
+
+访问路径: 仪表盘 → 浏览 → Prometheus → Prometheus 2.0 运行状态（中文版）
+
+**面板说明**:
+
+1. **采集统计**: 追加的样本数、采集持续时间、内存概况
+2. **TSDB 状态**: 活跃追加器、已加载的块、头部块
+3. **压缩和重载**: 压缩活动、重载次数
+4. **查询性能**: 查询持续时间、规则组评估持续时间/活动
+5. **WAL 和检查点**: WAL 损坏、头部块 GC 活动
+
+#### Grafana 指标监控仪表板
+
+访问路径: 仪表盘 → 浏览 → Grafana 指标监控（中文版）
+
+**面板说明**:
+
+1. **基本信息**: 活跃实例、仪表板数量、用户数量、播放列表数量、Grafana 版本
+2. **HTTP 请求统计**: HTTP 状态码、按路由组的请求、最常用的处理器
+3. **告警统计**: Grafana 活跃告警、Prometheus 告警
+
+#### 常用操作
+
+```bash
+# 首次登录
+# 1. 访问 http://localhost:3000
+# 2. 输入 admin / admin
+# 3. 系统提示修改密码（可跳过）
+
+# 调整时间范围: 右上角时间选择器
+# 刷新数据: 右上角刷新按钮或 Ctrl+R
+# 自动刷新: 右上角设置间隔（5s, 10s, 30s, 1m...）
+
+# 查看面板详情: 点击面板标题 → 查看
+# 编辑面板: 点击面板标题 → 编辑
+# 导出仪表板: 仪表盘设置(齿轮) → JSON 模型
+# 导入仪表板: 左侧菜单 → 仪表盘 → 导入
+
+# 切换语言: 左下角用户头像 → 偏好设置 → UI 语言
+
+# 重置管理员密码
+docker exec -it grafana grafana-cli admin reset-admin-password newpassword
+```
+
+#### 常见问题
+
+**问题: 仪表板显示 "No Data"**
+```bash
+# 1. 检查 Prometheus 采集状态
+curl http://localhost:9090/api/v1/targets
+
+# 2. 检查数据源配置
+# Grafana → 配置 → 数据源 → Prometheus → 保存并测试
+
+# 3. 检查 ceph-exporter 是否正常
+curl http://localhost:9128/metrics | head -20
+```
+
+**问题: 界面还是英文**
+```bash
+# 1. 检查环境变量
+docker exec grafana env | grep GF_DEFAULT_LOCALE
+
+# 2. 清除浏览器缓存，按 Ctrl+Shift+Delete
+
+# 3. 重启 Grafana
+docker-compose restart grafana
+```
+
+**问题: 图例表格列标题（Name/Last/Max/Mean）显示英文**
+
+这些是 Grafana 系统级别的界面元素，取决于 Grafana 版本的翻译完整度。面板标题和图例名称已经是中文。
+
+---
+
+---
 
 ### Alertmanager 告警服务
 
@@ -1313,16 +1671,20 @@ ceph-exporter/
 │   └── ceph-exporter.yaml              # Ceph-Exporter 配置
 ├── deployments/
 │   ├── prometheus/
-│   │   ├── prometheus.yml              # Prometheus 主配置
-│   │   └── alert_rules.yml             # 告警规则（中文）
+│   │   ├── prometheus.zh-CN.yml        # Prometheus 主配置（实际使用）
+│   │   ├── prometheus.yml              # Prometheus 配置（英文版备份）
+│   │   ├── alert_rules.zh-CN.yml       # 告警规则（中文）
+│   │   └── alert_rules.yml             # 告警规则（英文版备份）
 │   ├── alertmanager/
-│   │   └── alertmanager.yml            # Alertmanager 配置
+│   │   └── alertmanager.zh-CN.yml      # Alertmanager 配置
 │   ├── grafana/
 │   │   ├── provisioning/
 │   │   │   ├── datasources/            # 数据源自动配置
 │   │   │   └── dashboards/             # 仪表板自动配置
 │   │   └── dashboards/
-│   │       └── ceph-cluster.json       # Ceph 集群监控仪表板
+│   │       ├── ceph-cluster.json       # Ceph 集群监控仪表板（中文）
+│   │       ├── prometheus-stats-zh.json # Prometheus 运行状态仪表板（中文）
+│   │       └── grafana-metrics-zh.json  # Grafana 指标监控仪表板（中文）
 │   └── logstash/
 │       └── logstash.conf               # Logstash 配置
 └── docker-compose*.yml                 # Docker Compose 配置
@@ -1378,7 +1740,9 @@ plugins:
 
 ### Prometheus 配置
 
-**文件位置**: `deployments/prometheus/prometheus.yml`
+**实际使用的文件**: `deployments/prometheus/prometheus.zh-CN.yml`
+
+> 注意: Docker Compose 挂载的是 `prometheus.zh-CN.yml`，不是 `prometheus.yml`。修改配置时请编辑正确的文件。
 
 **完整配置示例**:
 ```yaml
@@ -1399,25 +1763,41 @@ alerting:
         - targets:
             - alertmanager:9093         # Alertmanager 地址
 
-# 采集配置
+# 采集配置（4 个采集目标）
 scrape_configs:
-  # Ceph Exporter
+  # Ceph Exporter - Ceph 集群指标
   - job_name: 'ceph-exporter'
+    scrape_interval: 15s
     static_configs:
       - targets: ['ceph-exporter:9128']
         labels:
-          cluster: 'ceph-demo'
-          environment: 'test'
+          service: 'ceph-exporter'
+          component: 'ceph'
 
-  # Prometheus 自身
+  # Prometheus 自身指标
   - job_name: 'prometheus'
+    scrape_interval: 15s
     static_configs:
       - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
 
-  # Alertmanager
+  # Alertmanager 指标
   - job_name: 'alertmanager'
+    scrape_interval: 30s
     static_configs:
       - targets: ['alertmanager:9093']
+        labels:
+          service: 'alertmanager'
+
+  # Grafana 运行指标
+  - job_name: 'grafana'
+    scrape_interval: 30s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['grafana:3000']
+        labels:
+          service: 'grafana'
 ```
 
 **配置说明**:
@@ -2489,8 +2869,8 @@ docker exec ceph-demo ceph df             # 查看容量使用
 
 ---
 
-**文档版本**: 1.0
-**最后更新**: 2026-03-11
+**文档版本**: 2.0
+**最后更新**: 2026-03-12
 **维护者**: Ceph-Exporter 项目团队
 
 ---
@@ -2500,7 +2880,8 @@ docker exec ceph-demo ceph df             # 查看容量使用
 本文档提供了 Ceph-Exporter 项目的完整操作指南，涵盖了从部署到维护的所有方面。通过本指南，您应该能够：
 
 - ✅ 快速部署和配置 Ceph-Exporter 监控系统
-- ✅ 熟练使用各个服务的界面和功能
+- ✅ 熟练使用各个服务的界面和功能（Ceph-Exporter、Prometheus、Grafana、Alertmanager、Ceph Demo、ELK、Jaeger）
+- ✅ 使用 3 个完全中文化的 Grafana 仪表板进行日常监控
 - ✅ 掌握常用的监控和管理操作
 - ✅ 独立排查和解决常见问题
 - ✅ 遵循最佳实践进行系统维护

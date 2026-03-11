@@ -111,3 +111,25 @@ scrape_configs:
           - "alertmanager:9093"
         labels:
           service: "alertmanager"
+
+  # ---------------------------------------------------------------------------
+  # Grafana monitoring
+  # ---------------------------------------------------------------------------
+  # Collect Grafana runtime metrics (dashboard count, user count, API performance, etc.)
+  # Used to monitor Grafana itself
+  - job_name: "grafana"
+
+    scrape_interval: 30s
+
+    scrape_timeout: 10s
+
+    # Grafana metrics endpoint
+    metrics_path: /metrics
+
+    static_configs:
+      - targets:
+          # Grafana service address (Docker service name:port)
+          - "grafana:3000"
+        labels:
+          service: "grafana"
+          component: "monitoring"
