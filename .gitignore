@@ -26,3 +26,6 @@ pre-commit/
 
 # Data directories (runtime data)
 ceph-exporter/deployments/data/
+
+# Images
+images/
