@@ -92,8 +92,8 @@ logger:
 # Environment variable overrides: JAEGER_URL, SERVICE_NAME
 # -----------------------------------------------------------------------------
 tracer:
-  enabled: false                                    # Whether to enable tracing (Phase 1 default disabled)
-  jaeger_url: "http://jaeger:14268/api/traces"      # Jaeger Collector URL
+  enabled: true                                     # Whether to enable tracing
+  jaeger_url: "jaeger:4318"                         # Jaeger OTLP HTTP endpoint (host:port, no http://)
   service_name: "ceph-exporter"                     # Service name
   sample_rate: 1.0                                  # Sampling rate (0.0-1.0)
 

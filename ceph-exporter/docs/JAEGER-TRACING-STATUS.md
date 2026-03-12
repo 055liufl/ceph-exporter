@@ -1,12 +1,146 @@
-# Jaeger 分布式追踪 - 当前状态说明
+# Jaeger 分布式追踪 - 状态更新
 
-## 问题：为什么 Jaeger 中没有追踪数据？
+## ✅ 实现完成！
 
-从 Jaeger UI 截图可以看到 **Service (0)**，说明没有任何追踪数据。
+**Phase 3 分布式追踪功能已完成！** 🎉
 
-### 原因
+之前 Jaeger 中没有追踪数据是因为只有 Phase 1 占位实现。现在已经实现了完整的 OpenTelemetry + Jaeger 集成。
 
-**ceph-exporter 的分布式追踪功能目前只是 Phase 1 占位实现，还没有实现真正的追踪功能。**
+## 当前状态
+
+### Phase 1（已完成）✅
+- ✅ 配置结构定义
+- ✅ 追踪模块框架
+- ✅ 空操作（no-op）函数
+
+### Phase 2（已完成）✅
+- ✅ 日志系统完整实现
+- ✅ ELK 集成成功
+- ✅ 可以在 Kibana 中查看日志
+
+### Phase 3（已完成）✅
+- ✅ OpenTelemetry SDK 集成
+- ✅ Jaeger OTLP HTTP Exporter
+- ✅ HTTP 请求自动追踪
+- ✅ Trace ID 和 Span ID 生成
+- ✅ 追踪属性记录
+- ✅ Docker Compose 集成
+
+## 快速开始
+
+### 1. 启用追踪功能
+
+运行快速启用脚本：
+
+```bash
+cd deployments
+./scripts/enable-jaeger-tracing.sh
+```
+
+或者手动启用：
+
+编辑 `configs/ceph-exporter.yaml`:
+
+```yaml
+tracer:
+  enabled: true                     # 启用追踪
+  jaeger_url: "jaeger:4318"
+  service_name: "ceph-exporter"
+  sample_rate: 1.0
+```
+
+### 2. 重启服务
+
+```bash
+cd deployments
+docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
+```
+
+### 3. 生成追踪数据
+
+```bash
+# 发送请求
+curl http://localhost:9128/metrics
+```
+
+### 4. 查看追踪数据
+
+访问 Jaeger UI: http://localhost:16686
+
+1. Service 下拉框选择: `ceph-exporter`
+2. 点击 `Find Traces` 按钮
+3. 查看追踪详情
+
+### 5. 运行测试
+
+```bash
+cd deployments
+./scripts/test-jaeger-tracing.sh
+```
+
+## 实现详情
+
+查看完整实现文档：
+
+- **实现文档**: `docs/JAEGER-TRACING-IMPLEMENTATION.md`
+- **测试脚本**: `deployments/scripts/test-jaeger-tracing.sh`
+- **启用脚本**: `deployments/scripts/enable-jaeger-tracing.sh`
+
+## 追踪数据示例
+
+启用后，Jaeger UI 中将显示：
+
+```
+Service: ceph-exporter
+  └─ Trace: 3f2a1b4c5d6e7f8g
+      └─ Span: /metrics (Duration: 125ms)
+          ├─ http.method: GET
+          ├─ http.url: http://localhost:9128/metrics
+          ├─ http.host: localhost:9128
+          └─ http.user_agent: curl/7.29.0
+```
+
+## 技术栈
+
+- **OpenTelemetry SDK**: v1.24.0
+- **OTLP HTTP Exporter**: v1.24.0
+- **Jaeger**: v1.35 (支持 OTLP)
+- **协议**: OTLP HTTP (端口 4318)
+
+## 故障排查
+
+如果 Jaeger 中仍然没有追踪数据：
+
+1. ✅ 检查追踪是否启用
+   ```bash
+   grep "enabled:" configs/ceph-exporter.yaml
+   ```
+
+2. ✅ 检查 Jaeger 是否运行
+   ```bash
+   docker ps | grep jaeger
+   ```
+
+3. ✅ 检查 ceph-exporter 日志
+   ```bash
+   docker logs ceph-exporter | grep tracer
+   ```
+
+4. ✅ 运行测试脚本
+   ```bash
+   ./scripts/test-jaeger-tracing.sh
+   ```
+
+## 总结
+
+**从 Phase 1 占位实现到 Phase 3 完整实现，分布式追踪功能现已可用！**
+
+- ✅ 完整的 OpenTelemetry 集成
+- ✅ Jaeger OTLP HTTP 支持
+- ✅ 自动 HTTP 请求追踪
+- ✅ 配置管理和测试工具
+
+**现在可以在 Jaeger UI 中看到完整的追踪数据了！** 🎉
 
 ## 当前实现状态
 

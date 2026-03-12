@@ -73,6 +73,7 @@ services:
     networks:
       - ceph-network
       - monitor-network
+      - tracing-network
     volumes:
       - ./data/ceph-demo/config:/etc/ceph:ro
       - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
@@ -218,6 +219,7 @@ services:
     container_name: jaeger
     environment:
       - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
       - MEMORY_MAX_TRACES=1000
     volumes:
       - /etc/localtime:/etc/localtime:ro
@@ -225,9 +227,11 @@ services:
     ports:
       - "16686:16686"  # Jaeger UI
       - "14268:14268"  # Collector HTTP
+      - "4318:4318"    # OTLP HTTP
       - "6831:6831/udp"  # Jaeger compact thrift
     networks:
       - tracing-network
+      - monitor-network
     restart: unless-stopped
     mem_limit: 256m
 

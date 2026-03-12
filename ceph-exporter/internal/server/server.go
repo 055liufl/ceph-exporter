@@ -138,9 +138,41 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
 }
 
+// responseWriter 包装 http.ResponseWriter 以捕获状态码
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	written    bool
+}
+
+// newResponseWriter 创建 responseWriter 实例
+func newResponseWriter(w http.ResponseWriter) *responseWriter {
+	return &responseWriter{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK, // 默认 200
+		written:        false,
+	}
+}
+
+// WriteHeader 捕获状态码
+func (rw *responseWriter) WriteHeader(code int) {
+	if !rw.written {
+		rw.statusCode = code
+		rw.written = true
+		rw.ResponseWriter.WriteHeader(code)
+	}
+}
+
+// Write 确保状态码被记录
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if !rw.written {
+		rw.WriteHeader(http.StatusOK)
+	}
+	return rw.ResponseWriter.Write(b)
+}
+
 // tracingMiddleware 追踪中间件
 // 为每个 HTTP 请求创建追踪 Span，记录请求和响应信息。
-// Phase 1 中追踪为占位实现，不会产生实际追踪数据。
 //
 // 参数:
 //   - next: 下一个 HTTP 处理器
@@ -155,21 +187,49 @@ func (s *Server) tracingMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 创建追踪 Span（Phase 1 为空操作）
-		ctx, span := tracer.StartSpan(r.Context(), "http.request")
+		// 创建追踪 Span
+		ctx, span := tracer.StartSpan(r.Context(), r.URL.Path)
 		defer span.End()
+
+		// 设置 HTTP 请求属性
+		tracer.SetAttributes(ctx,
+			tracer.StringAttr("http.method", r.Method),
+			tracer.StringAttr("http.url", r.URL.String()),
+			tracer.StringAttr("http.host", r.Host),
+			tracer.StringAttr("http.user_agent", r.UserAgent()),
+		)
 
 		// 将带有 Span 信息的上下文注入到请求中
 		r = r.WithContext(ctx)
 
-		// 记录追踪 ID 到日志（Phase 1 中 traceID 为空字符串）
+		// 记录追踪 ID 到日志
 		traceID := tracer.GetTraceID(ctx)
 		if traceID != "" {
 			s.log.WithTraceID(traceID).Debugf("处理请求: %s %s", r.Method, r.URL.Path)
 		}
 
+		// 包装 ResponseWriter 以捕获状态码
+		rw := newResponseWriter(w)
+
 		// 调用下一个 Handler 处理实际请求
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(rw, r)
+
+		// 记录响应状态码
+		tracer.SetAttributes(ctx,
+			tracer.IntAttr("http.status_code", rw.statusCode),
+		)
+
+		// 根据状态码设置 Span 状态
+		if rw.statusCode >= 500 {
+			// 5xx 服务器错误
+			tracer.SetSpanStatus(ctx, tracer.StatusError, "Server error")
+		} else if rw.statusCode >= 400 {
+			// 4xx 客户端错误
+			tracer.SetSpanStatus(ctx, tracer.StatusError, "Client error")
+		} else {
+			// 2xx/3xx 成功
+			tracer.SetSpanStatus(ctx, tracer.StatusOK, "")
+		}
 	})
 }
 
