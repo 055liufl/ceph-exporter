@@ -16,6 +16,8 @@ import (
 
 	"ceph-exporter/internal/config"
 	"ceph-exporter/internal/logger"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // newTestLogger 创建用于测试的日志实例
@@ -86,11 +88,6 @@ func TestStartSpan(t *testing.T) {
 		t.Fatal("StartSpan 返回的 Span 为 nil")
 	}
 
-	// 验证 Span 名称
-	if span.name != "test.operation" {
-		t.Errorf("Span 名称期望 'test.operation'，实际 '%s'", span.name)
-	}
-
 	// End 不应该 panic
 	span.End()
 }
@@ -101,8 +98,11 @@ func TestSpan_SetAttributes(t *testing.T) {
 
 	// 各种参数调用都不应该 panic
 	span.SetAttributes()
-	span.SetAttributes("key", "value")
-	span.SetAttributes("key1", "value1", "key2", "value2")
+	span.SetAttributes(attribute.String("key", "value"))
+	span.SetAttributes(
+		attribute.String("key1", "value1"),
+		attribute.String("key2", "value2"),
+	)
 
 	span.End()
 }

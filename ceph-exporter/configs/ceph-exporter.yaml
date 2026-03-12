@@ -39,8 +39,36 @@ prometheus:
 
 # -----------------------------------------------------------------------------
 # Logger Configuration
-# Supports multiple levels, multiple output targets, log rotation
+# Supports multiple levels, multiple output targets, log rotation, and ELK integration
 # Environment variable overrides: LOG_LEVEL, LOG_FORMAT, LOGSTASH_URL
+#
+# 日志推送方案切换说明:
+#
+# 方案 1: 直接推送到 Logstash (Direct Push)
+#   - 设置 enable_elk: true
+#   - 配置 logstash_url 和 logstash_protocol
+#   - 日志会通过 TCP/UDP 直接推送到 Logstash
+#   - 优点: 实时推送，无需额外组件
+#   - 缺点: 需要网络连接，Logstash 故障会影响日志
+#
+# 方案 2: 容器日志收集 (Container Log Collection)
+#   - 设置 enable_elk: true
+#   - 设置 output: "stdout"
+#   - 使用 Filebeat/Fluentd 等采集容器标准输出
+#   - 优点: 解耦，Logstash 故障不影响应用
+#   - 缺点: 需要部署日志收集器
+#
+# 方案 3: 文件日志收集 (File Log Collection)
+#   - 设置 enable_elk: true
+#   - 设置 output: "stdout"
+#   - 使用 Filebeat 监控日志文件并推送
+#   - 优点: 日志持久化，可离线分析
+#   - 缺点: 需要管理日志文件和磁盘空间
+#
+# 推荐配置:
+#   - 开发环境: output: "stdout", enable_elk: true (方便查看)
+#   - 生产环境(容器): output: "stdout", enable_elk: true + Filebeat sidecar (方案2)
+#   - 生产环境(直连): output: "stdout", enable_elk: true (方案1)
 # -----------------------------------------------------------------------------
 logger:
   level: "info"                 # Log level: trace, debug, info, warn, error, fatal, panic
@@ -51,8 +79,12 @@ logger:
   max_backups: 3                # Number of old log files to retain
   max_age: 28                   # Maximum days to retain log files
   compress: true                # Whether to compress archived old log files
-  enable_elk: false             # Whether to enable ELK log integration (Phase 3 implementation)
-  logstash_url: "logstash:5044" # Logstash address (effective when enable_elk=true)
+
+  # ELK Integration (方案 1: 直接推送到 Logstash)
+  enable_elk: true             # Whether to enable direct push to Logstash
+  logstash_url: "logstash:5000" # Logstash address (host:port)
+  logstash_protocol: "tcp"      # Protocol: tcp (reliable, default) or udp (fast)
+  service_name: "ceph-exporter" # Service name for log identification in ELK
 
 # -----------------------------------------------------------------------------
 # Tracer Configuration (Phase 3 implementation, only configuration structure defined here)

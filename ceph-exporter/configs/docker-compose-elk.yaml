@@ -1,0 +1,128 @@
+# =============================================================================
+# Docker Compose 配置示例 - 展示两种日志方案的部署
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # 方案 1: 直接推送到 Logstash
+  # ceph-exporter 直接通过 TCP/UDP 推送日志到 Logstash
+  # ---------------------------------------------------------------------------
+  ceph-exporter-direct:
+    image: ceph-exporter:latest
+    container_name: ceph-exporter-direct
+    volumes:
+      - ./configs/ceph-exporter.yaml:/app/configs/ceph-exporter.yaml
+      - /etc/ceph:/etc/ceph:ro
+    environment:
+      - LOG_LEVEL=info
+      - LOGSTASH_URL=logstash:5044
+    # 配置文件中设置 enable_elk: true
+    command: ["-config", "/app/configs/ceph-exporter.yaml"]
+    ports:
+      - "9128:9128"
+    networks:
+      - elk
+    depends_on:
+      - logstash
+
+  # ---------------------------------------------------------------------------
+  # 方案 2: 容器日志收集（推荐）
+  # ceph-exporter 输出到 stdout，由 Filebeat sidecar 采集
+  # ---------------------------------------------------------------------------
+  ceph-exporter-sidecar:
+    image: ceph-exporter:latest
+    container_name: ceph-exporter-sidecar
+    volumes:
+      - ./configs/ceph-exporter.yaml:/app/configs/ceph-exporter.yaml
+      - /etc/ceph:/etc/ceph:ro
+      - ceph-logs:/var/log/ceph-exporter
+    environment:
+      - LOG_LEVEL=info
+    # 配置文件中设置 enable_elk: false, output: stdout
+    command: ["-config", "/app/configs/ceph-exporter.yaml"]
+    ports:
+      - "9129:9128"
+    networks:
+      - elk
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Filebeat sidecar - 采集 ceph-exporter 的日志
+  filebeat-sidecar:
+    image: elastic/filebeat:8.11.0
+    container_name: filebeat-sidecar
+    user: root
+    volumes:
+      - ./configs/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - filebeat-data:/usr/share/filebeat/data
+    environment:
+      - NODE_NAME=${HOSTNAME}
+    networks:
+      - elk
+    depends_on:
+      - ceph-exporter-sidecar
+      - logstash
+
+  # ---------------------------------------------------------------------------
+  # ELK Stack
+  # ---------------------------------------------------------------------------
+
+  # Elasticsearch
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - elk
+
+  # Logstash
+  logstash:
+    image: logstash:8.11.0
+    container_name: logstash
+    volumes:
+      - ./configs/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    ports:
+      - "5044:5044"  # Beats input
+      - "9600:9600"  # Monitoring API
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  # Kibana
+  kibana:
+    image: kibana:8.11.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+networks:
+  elk:
+    driver: bridge
+
+volumes:
+  es-data:
+  filebeat-data:
+  ceph-logs:

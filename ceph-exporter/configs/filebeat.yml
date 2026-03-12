@@ -1,0 +1,89 @@
+# =============================================================================
+# Filebeat 配置示例 - 用于采集 ceph-exporter 日志
+# =============================================================================
+# 本配置文件展示如何使用 Filebeat 采集 ceph-exporter 的日志并推送到 ELK
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 方案 2A: 采集容器标准输出（Kubernetes/Docker）
+# 方案 2B: 采集日志文件
+# 注意: 根据实际部署环境选择其中一种方案，注释掉另一种
+# -----------------------------------------------------------------------------
+filebeat.inputs:
+# 方案 2A: 容器标准输出
+- type: container
+  enabled: false  # 默认禁用，根据需要启用
+  paths:
+    - /var/lib/docker/containers/*/*.log
+  # 只采集 ceph-exporter 容器的日志
+  processors:
+    - add_kubernetes_metadata:
+        host: ${NODE_NAME}
+        matchers:
+        - logs_path:
+            logs_path: "/var/lib/docker/containers/"
+    - drop_event:
+        when:
+          not:
+            equals:
+              kubernetes.container.name: "ceph-exporter"
+  # 解析 JSON 格式日志
+  json.keys_under_root: true
+  json.add_error_key: true
+  json.message_key: message
+
+# 方案 2B: 日志文件
+- type: log
+  enabled: true
+  paths:
+    - /var/log/ceph-exporter/*.log
+  # 解析 JSON 格式日志
+  json.keys_under_root: true
+  json.add_error_key: true
+  json.message_key: message
+  # 添加额外字段
+  fields:
+    service: ceph-exporter
+    environment: production
+  fields_under_root: true
+
+# -----------------------------------------------------------------------------
+# 输出到 Logstash
+# -----------------------------------------------------------------------------
+output.logstash:
+  hosts: ["logstash:5044"]
+  # 负载均衡
+  loadbalance: true
+  # 启用压缩
+  compression_level: 3
+  # 超时设置
+  timeout: 30
+  # 批量发送
+  bulk_max_size: 2048
+
+# -----------------------------------------------------------------------------
+# 输出到 Elasticsearch（可选，跳过 Logstash）
+# -----------------------------------------------------------------------------
+# output.elasticsearch:
+#   hosts: ["elasticsearch:9200"]
+#   index: "ceph-exporter-%{+yyyy.MM.dd}"
+#   username: "elastic"
+#   password: "changeme"
+
+# -----------------------------------------------------------------------------
+# 日志级别
+# -----------------------------------------------------------------------------
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
+
+# -----------------------------------------------------------------------------
+# 监控
+# -----------------------------------------------------------------------------
+monitoring.enabled: true
+monitoring.elasticsearch:
+  hosts: ["elasticsearch:9200"]

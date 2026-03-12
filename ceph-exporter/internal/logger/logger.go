@@ -40,6 +40,7 @@ type Logger struct {
 	*logrus.Logger                      // 内嵌 logrus.Logger，继承所有日志方法
 	config         *config.LoggerConfig // 日志配置引用
 	fileWriter     io.WriteCloser       // 文件写入器（output=file 时使用），需要在 Close 时释放
+	logstashHook   *LogstashHook        // Logstash Hook（enable_elk=true 时使用）
 }
 
 // NewLogger 创建新的日志实例
@@ -94,12 +95,23 @@ func NewLogger(cfg *config.LoggerConfig) (*Logger, error) {
 		return nil, err
 	}
 
-	// ELK 集成提示（Phase 3 完整实现）
+	// ELK 集成（Logstash Hook）
 	if cfg.EnableELK && cfg.LogstashURL != "" {
-		// TODO: Phase 3 实现 Logstash Hook
-		// hook := NewLogstashHook(cfg.LogstashURL)
-		// log.AddHook(hook)
-		logger.Info("ELK 集成已配置（将在 Phase 3 完整实现）")
+		// 解析 Logstash 协议和地址
+		protocol := cfg.LogstashProtocol
+		if protocol == "" {
+			protocol = "tcp" // 默认使用 TCP
+		}
+
+		// 创建 Logstash Hook
+		hook, err := NewLogstashHook(protocol, cfg.LogstashURL, cfg.ServiceName)
+		if err != nil {
+			logger.Warnf("创建 Logstash Hook 失败: %v，日志将不会推送到 ELK", err)
+		} else {
+			log.AddHook(hook)
+			logger.logstashHook = hook
+			logger.Infof("ELK 集成已启用，日志将推送到 %s://%s", protocol, cfg.LogstashURL)
+		}
 	}
 
 	return logger, nil
@@ -151,11 +163,19 @@ func (l *Logger) setOutput() error {
 }
 
 // Close 关闭日志实例，释放资源
-// 主要用于关闭文件输出的写入器，确保日志数据完整写入磁盘
+// 主要用于关闭文件输出的写入器和 Logstash Hook，确保日志数据完整写入
 //
 // 返回:
 //   - error: 关闭过程中的错误
 func (l *Logger) Close() error {
+	// 关闭 Logstash Hook
+	if l.logstashHook != nil {
+		if err := l.logstashHook.Close(); err != nil {
+			l.Warnf("关闭 Logstash Hook 失败: %v", err)
+		}
+	}
+
+	// 关闭文件写入器
 	if l.fileWriter != nil {
 		return l.fileWriter.Close()
 	}

@@ -64,16 +64,18 @@ type PrometheusConfig struct {
 // LoggerConfig 日志系统配置
 // 支持多级别日志、多种输出格式、文件轮转和 ELK 集成
 type LoggerConfig struct {
-	Level       string `yaml:"level"`        // 日志级别: trace, debug, info, warn, error, fatal, panic
-	Format      string `yaml:"format"`       // 日志格式: json（结构化）, text（文本）
-	Output      string `yaml:"output"`       // 输出目标: stdout, stderr, file
-	FilePath    string `yaml:"file_path"`    // 日志文件路径（output=file 时生效）
-	MaxSize     int    `yaml:"max_size"`     // 单个日志文件最大大小（MB），默认 100
-	MaxBackups  int    `yaml:"max_backups"`  // 保留的旧日志文件数量，默认 3
-	MaxAge      int    `yaml:"max_age"`      // 保留日志文件的最大天数，默认 28
-	Compress    bool   `yaml:"compress"`     // 是否压缩归档的旧日志文件
-	EnableELK   bool   `yaml:"enable_elk"`   // 是否启用 ELK 日志集成
-	LogstashURL string `yaml:"logstash_url"` // Logstash 地址（enable_elk=true 时生效）
+	Level            string `yaml:"level"`             // 日志级别: trace, debug, info, warn, error, fatal, panic
+	Format           string `yaml:"format"`            // 日志格式: json（结构化）, text（文本）
+	Output           string `yaml:"output"`            // 输出目标: stdout, stderr, file
+	FilePath         string `yaml:"file_path"`         // 日志文件路径（output=file 时生效）
+	MaxSize          int    `yaml:"max_size"`          // 单个日志文件最大大小（MB），默认 100
+	MaxBackups       int    `yaml:"max_backups"`       // 保留的旧日志文件数量，默认 3
+	MaxAge           int    `yaml:"max_age"`           // 保留日志文件的最大天数，默认 28
+	Compress         bool   `yaml:"compress"`          // 是否压缩归档的旧日志文件
+	EnableELK        bool   `yaml:"enable_elk"`        // 是否启用 ELK 日志集成
+	LogstashURL      string `yaml:"logstash_url"`      // Logstash 地址（enable_elk=true 时生效）
+	LogstashProtocol string `yaml:"logstash_protocol"` // Logstash 协议: tcp（默认）, udp
+	ServiceName      string `yaml:"service_name"`      // 服务名称，用于在 ELK 中标识日志来源
 }
 
 // TracerConfig 追踪系统配置
@@ -152,6 +154,12 @@ func (c *Config) SetDefaults() {
 	}
 	if c.Logger.MaxAge == 0 {
 		c.Logger.MaxAge = 28 // 默认保留 28 天
+	}
+	if c.Logger.LogstashProtocol == "" {
+		c.Logger.LogstashProtocol = "tcp" // 默认使用 TCP 协议
+	}
+	if c.Logger.ServiceName == "" {
+		c.Logger.ServiceName = "ceph-exporter" // 默认服务名称
 	}
 
 	// ----- Tracer 默认值 -----

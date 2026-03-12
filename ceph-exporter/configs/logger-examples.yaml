@@ -1,0 +1,118 @@
+# =============================================================================
+# 日志配置示例文件
+# =============================================================================
+# 本文件提供不同场景下的日志配置示例，方便快速切换配置方案
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 场景 1: 开发环境 - 输出到控制台，便于调试
+# -----------------------------------------------------------------------------
+logger_dev:
+  level: "debug"                # 开发环境使用 debug 级别
+  format: "text"                # 文本格式，便于阅读
+  output: "stdout"              # 输出到标准输出
+  enable_elk: false             # 不推送到 ELK
+
+# -----------------------------------------------------------------------------
+# 场景 2: 生产环境 - 容器日志收集（推荐）
+# 使用 Filebeat/Fluentd 等采集容器标准输出
+# -----------------------------------------------------------------------------
+logger_prod_container:
+  level: "info"                 # 生产环境使用 info 级别
+  format: "json"                # JSON 格式，便于解析
+  output: "stdout"              # 输出到标准输出
+  enable_elk: false             # 不直接推送，由日志收集器处理
+  service_name: "ceph-exporter"
+
+# Kubernetes 部署示例:
+# apiVersion: v1
+# kind: Pod
+# spec:
+#   containers:
+#   - name: ceph-exporter
+#     image: ceph-exporter:latest
+#   - name: filebeat
+#     image: elastic/filebeat:8.x
+#     volumeMounts:
+#     - name: filebeat-config
+#       mountPath: /usr/share/filebeat/filebeat.yml
+
+# -----------------------------------------------------------------------------
+# 场景 3: 生产环境 - 直接推送到 Logstash (TCP)
+# 日志通过 TCP 直接推送到 Logstash，可靠但需要保持连接
+# -----------------------------------------------------------------------------
+logger_prod_logstash_tcp:
+  level: "info"
+  format: "json"
+  output: "stdout"              # 同时输出到 stdout（双重保险）
+  enable_elk: true              # 启用 ELK 集成
+  logstash_url: "logstash:5044" # Logstash 地址
+  logstash_protocol: "tcp"      # TCP 协议（可靠）
+  service_name: "ceph-exporter"
+
+# -----------------------------------------------------------------------------
+# 场景 4: 生产环境 - 直接推送到 Logstash (UDP)
+# 日志通过 UDP 推送，速度快但可能丢失
+# -----------------------------------------------------------------------------
+logger_prod_logstash_udp:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  enable_elk: true
+  logstash_url: "logstash:5044"
+  logstash_protocol: "udp"      # UDP 协议（快速）
+  service_name: "ceph-exporter"
+
+# -----------------------------------------------------------------------------
+# 场景 5: 生产环境 - 文件日志 + Filebeat 采集
+# 日志写入文件，由 Filebeat 监控并推送到 Logstash
+# -----------------------------------------------------------------------------
+logger_prod_file:
+  level: "info"
+  format: "json"
+  output: "file"                # 输出到文件
+  file_path: "/var/log/ceph-exporter/ceph-exporter.log"
+  max_size: 100                 # 单文件最大 100MB
+  max_backups: 3                # 保留 3 个备份
+  max_age: 28                   # 保留 28 天
+  compress: true                # 压缩旧日志
+  enable_elk: false             # 由 Filebeat 处理
+  service_name: "ceph-exporter"
+
+# Filebeat 配置示例:
+# filebeat.inputs:
+# - type: log
+#   enabled: true
+#   paths:
+#     - /var/log/ceph-exporter/*.log
+#   json.keys_under_root: true
+#   json.add_error_key: true
+# output.logstash:
+#   hosts: ["logstash:5044"]
+
+# -----------------------------------------------------------------------------
+# 场景 6: 混合模式 - 文件 + Logstash 双重输出
+# 日志同时写入文件和推送到 Logstash
+# -----------------------------------------------------------------------------
+logger_prod_hybrid:
+  level: "info"
+  format: "json"
+  output: "file"                # 主输出到文件
+  file_path: "/var/log/ceph-exporter/ceph-exporter.log"
+  max_size: 100
+  max_backups: 3
+  max_age: 28
+  compress: true
+  enable_elk: true              # 同时推送到 Logstash
+  logstash_url: "logstash:5044"
+  logstash_protocol: "tcp"
+  service_name: "ceph-exporter"
+
+# -----------------------------------------------------------------------------
+# 快速切换指南
+# -----------------------------------------------------------------------------
+# 1. 开发调试: 复制 logger_dev 配置到 ceph-exporter.yaml
+# 2. 容器部署: 复制 logger_prod_container 配置 + 部署 Filebeat sidecar
+# 3. 直连 ELK: 复制 logger_prod_logstash_tcp 配置
+# 4. 文件日志: 复制 logger_prod_file 配置 + 配置 Filebeat
+# 5. 双重保险: 复制 logger_prod_hybrid 配置

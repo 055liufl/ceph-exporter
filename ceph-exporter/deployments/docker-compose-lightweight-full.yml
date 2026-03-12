@@ -180,14 +180,15 @@ services:
     networks:
       - logging-network
     environment:
-      - "LS_JAVA_OPTS=-Xms128m -Xmx128m"
+      - "LS_JAVA_OPTS=-Xms512m -Xmx512m"
     volumes:
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped
     depends_on:
       - elasticsearch
-    mem_limit: 256m
+    mem_limit: 768m
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.0
