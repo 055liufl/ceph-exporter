@@ -74,6 +74,7 @@ services:
       - ceph-network
       - monitor-network
       - tracing-network
+      - logging-network
     volumes:
       - ./data/ceph-demo/config:/etc/ceph:ro
       - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro

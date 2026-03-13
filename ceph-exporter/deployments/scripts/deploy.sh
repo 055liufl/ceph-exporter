@@ -375,18 +375,27 @@ deploy_full() {
 
     init_data_dirs
 
+    # 设置系统参数（Elasticsearch 需要）
+    log_info "设置系统参数..."
+    sudo sysctl -w vm.max_map_count=262144 2>/dev/null || log_warn "无法设置 vm.max_map_count，可能需要 root 权限"
+
+    # 修复数据目录权限（在启动前）
+    log_info "修复数据目录权限..."
+    [ -d "data/elasticsearch" ] && sudo chown -R 1000:1000 data/elasticsearch 2>/dev/null || true
+    [ -d "data/prometheus" ] && sudo chown -R 65534:65534 data/prometheus 2>/dev/null || true
+    [ -d "data/grafana" ] && sudo chown -R 472:472 data/grafana 2>/dev/null || true
+    [ -d "data/ceph-demo/config" ] && sudo chmod -R 755 data/ceph-demo/config 2>/dev/null || true
+
     cd "$DEPLOY_DIR"
     ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d
 
-    log_info "等待所有服务启动（这可能需要几分钟）..."
-    sleep 120
+    log_info "等待 Elasticsearch 启动..."
+    sleep 30
+
+    log_info "等待 ceph-demo 生成配置..."
+    sleep 30
 
     # 修复 Ceph keyring 文件权限
-    # 说明：
-    #   - Ceph Demo 容器创建的 keyring 文件默认权限为 600（只有所有者可读写）
-    #   - ceph-exporter 容器需要读取这些文件才能连接到 Ceph 集群
-    #   - 将权限修改为 644（所有者可读写，其他人可读）允许容器间共享
-    #   - 这是 Docker 环境中的常见做法，不会影响安全性
     log_info "修复 Ceph keyring 文件权限..."
     if [ -f "data/ceph-demo/config/ceph.client.admin.keyring" ]; then
         chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
@@ -397,18 +406,39 @@ deploy_full() {
         log_info "✓ ceph.mon.keyring 权限已修复"
     fi
 
-    # 重启 ceph-exporter 以应用权限修复
-    # 说明：
-    #   - 权限修复后需要重启 ceph-exporter 才能生效
-    #   - 使用 restart 而不是 stop/start 可以保持容器配置
+    # 重启 ceph-exporter 以应用权限修复和网络配置
     log_info "重启 ceph-exporter 服务..."
-    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml restart ceph-exporter
+    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d ceph-exporter
 
-    # 等待 ceph-exporter 重启完成
-    log_info "等待 ceph-exporter 启动..."
+    log_info "等待所有服务就绪..."
+    sleep 20
+
+    # 生成测试数据
+    log_info "生成测试数据..."
+    for i in {1..10}; do
+        curl -s http://localhost:9128/metrics > /dev/null 2>&1 || true
+        sleep 0.5
+    done
+
+    log_info "等待数据推送到 ELK 和 Jaeger..."
     sleep 10
 
     show_access_info_full
+
+    # 显示额外的使用提示
+    echo ""
+    log_info "在 Kibana 中创建索引模式:"
+    echo "  1. 访问 http://localhost:5601"
+    echo "  2. Stack Management → 索引模式"
+    echo "  3. 创建索引模式: ceph-exporter-*"
+    echo "  4. 选择时间字段: @timestamp"
+    echo ""
+    log_info "在 Jaeger UI 中查看追踪:"
+    echo "  1. 访问 http://localhost:16686"
+    echo "  2. Service 选择: ceph-exporter"
+    echo "  3. 点击 'Find Traces'"
+    echo "  4. 查看追踪数据（包含响应状态码和 Span 状态）"
+    echo ""
 }
 
 # 显示访问信息（最小栈）
