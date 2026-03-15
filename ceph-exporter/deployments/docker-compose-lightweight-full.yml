@@ -99,8 +99,8 @@ services:
       - monitor-network
     volumes:
       - ./data/prometheus:/prometheus
-      - ./prometheus/prometheus.zh-CN.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/alert_rules.zh-CN.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped
@@ -117,7 +117,6 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_INSTALL_PLUGINS=
-      - GF_DEFAULT_LOCALE=zh-CN
     networks:
       - monitor-network
     volumes:
@@ -144,7 +143,7 @@ services:
       - monitor-network
     volumes:
       - ./data/alertmanager:/alertmanager
-      - ./alertmanager/alertmanager.zh-CN.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped

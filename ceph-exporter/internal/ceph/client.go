@@ -116,16 +116,31 @@ type PoolStats struct {
 type OSDStats struct {
 	ID              int     `json:"id"`                // OSD ID
 	Name            string  `json:"name"`              // OSD 名称（如 "osd.0"）
-	Up              int     `json:"up"`                // 是否处于 up 状态（1=up, 0=down）
-	In              int     `json:"in"`                // 是否处于 in 状态（1=in, 0=out）
+	Status          string  `json:"status"`            // 状态描述 ("up" 或 "down")
+	Reweight        float64 `json:"reweight"`          // 权重 (1.0=in, 0.0=out)
 	TotalBytes      int64   `json:"kb"`                // 总容量（KB）
 	UsedBytes       int64   `json:"kb_used"`           // 已使用容量（KB）
 	AvailBytes      int64   `json:"kb_avail"`          // 可用容量（KB）
 	Utilization     float64 `json:"utilization"`       // 使用率（0-100）
 	PGs             int     `json:"pgs"`               // 该 OSD 上的 PG 数量
-	Status          string  `json:"status"`            // 状态描述
 	ApplyLatencyMs  float64 `json:"apply_latency_ms"`  // 应用延迟（毫秒）
 	CommitLatencyMs float64 `json:"commit_latency_ms"` // 提交延迟（毫秒）
+}
+
+// Up 返回 OSD 是否处于 up 状态（1=up, 0=down）
+func (o *OSDStats) Up() int {
+	if o.Status == "up" {
+		return 1
+	}
+	return 0
+}
+
+// In 返回 OSD 是否处于 in 状态（1=in, 0=out）
+func (o *OSDStats) In() int {
+	if o.Reweight > 0 {
+		return 1
+	}
+	return 0
 }
 
 // MonitorStats Monitor 统计信息
@@ -137,7 +152,7 @@ type MonitorStats struct {
 	StoreBytes int64   `json:"store_bytes"` // 存储大小（字节）
 	ClockSkew  float64 `json:"clock_skew"`  // 时钟偏差（秒）
 	LatencyMs  float64 `json:"latency"`     // 延迟（毫秒）
-	InQuorum   bool    `json:"in_quorum"`   // 是否在仲裁中
+	InQuorum   bool    `json:"-"`           // 是否在仲裁中（不从 JSON 解析，由代码设置）
 }
 
 // MDSStats MDS 统计信息
@@ -465,11 +480,11 @@ func (c *Client) GetOSDPerf(ctx context.Context) ([]byte, error) {
 //   - error: 获取失败时返回错误信息
 func (c *Client) GetMonitorStats(ctx context.Context) ([]MonitorStats, error) {
 	cmd, err := json.Marshal(map[string]interface{}{
-		"prefix": "mon dump",
+		"prefix": "quorum_status",
 		"format": "json",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("构建 mon dump 命令失败: %w", err)
+		return nil, fmt.Errorf("构建 quorum_status 命令失败: %w", err)
 	}
 
 	data, err := c.ExecuteCommand(ctx, cmd)
@@ -477,15 +492,30 @@ func (c *Client) GetMonitorStats(ctx context.Context) ([]MonitorStats, error) {
 		return nil, err
 	}
 
-	// mon dump 命令返回的 JSON 结构中，Monitor 列表在 mons 字段中
-	var monDump struct {
-		Mons []MonitorStats `json:"mons"`
+	// quorum_status 命令返回的 JSON 结构
+	var quorumStatus struct {
+		QuorumNames []string `json:"quorum_names"` // 在 quorum 中的 Monitor 名称列表
+		Monmap      struct {
+			Mons []MonitorStats `json:"mons"` // Monitor 列表
+		} `json:"monmap"`
 	}
-	if err := json.Unmarshal(data, &monDump); err != nil {
+	if err := json.Unmarshal(data, &quorumStatus); err != nil {
 		return nil, fmt.Errorf("解析 Monitor 统计 JSON 失败: %w", err)
 	}
 
-	return monDump.Mons, nil
+	// 创建 quorum 名称的 map，用于快速查找
+	quorumMap := make(map[string]bool)
+	for _, name := range quorumStatus.QuorumNames {
+		quorumMap[name] = true
+	}
+
+	// 为每个 Monitor 设置 InQuorum 状态
+	monitors := quorumStatus.Monmap.Mons
+	for i := range monitors {
+		monitors[i].InQuorum = quorumMap[monitors[i].Name]
+	}
+
+	return monitors, nil
 }
 
 // GetHealthDetail 获取集群健康详情
@@ -713,3 +743,5 @@ func (c *Client) HealthCheck() error {
 	_, err := c.GetClusterStatus(ctx)
 	return err
 }
+
+// Cache buster: 1773570924

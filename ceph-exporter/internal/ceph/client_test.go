@@ -322,8 +322,8 @@ func TestOSDStats_JSONParsing(t *testing.T) {
 	if osd0.Name != "osd.0" {
 		t.Errorf("OSD[0].Name 期望 'osd.0'，实际 '%s'", osd0.Name)
 	}
-	if osd0.Up != 1 {
-		t.Errorf("OSD[0].Up 期望 1，实际 %d", osd0.Up)
+	if osd0.Up() != 1 {
+		t.Errorf("OSD[0].Up() 期望 1，实际 %d", osd0.Up())
 	}
 	if osd0.Utilization != 30.0 {
 		t.Errorf("OSD[0].Utilization 期望 30.0，实际 %f", osd0.Utilization)

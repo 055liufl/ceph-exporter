@@ -71,7 +71,7 @@ prometheus:
 #   - 生产环境(直连): output: "stdout", enable_elk: true (方案1)
 # -----------------------------------------------------------------------------
 logger:
-  level: "info"                 # Log level: trace, debug, info, warn, error, fatal, panic
+  level: "debug"                 # Log level: trace, debug, info, warn, error, fatal, panic
   format: "json"                # Log format: json (structured), text (plain text)
   output: "stdout"              # Output target: stdout (standard output), stderr (standard error), file (file)
   file_path: "/var/log/ceph-exporter/ceph-exporter.log"  # Log file path (effective when output=file)

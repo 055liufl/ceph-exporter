@@ -299,5 +299,5 @@ docker run --rm -v $(pwd)/ceph-exporter/deployments/prometheus:/etc/prometheus p
 ---
 
 **文档版本**: 1.0
-**最后更新**: 2026-03-07
+**最后更新**: 2026-03-15
 **建议**: 根据实际需求修改配置，修改后记得重启服务

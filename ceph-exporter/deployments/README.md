@@ -30,9 +30,13 @@ deployments/
     ├── diagnose.sh                # 诊断脚本（检查服务状态和配置）
     ├── fix-deployment.sh          # 修复脚本（权限、配置等问题）
     ├── verify-deployment.sh       # 验证脚本（健康检查）
-    ├── test-ceph-demo.sh          # Ceph Demo 测试脚本
-    ├── deploy-full-stack.sh       # 完整栈部署脚本
-    └── clean-volumes.sh           # 数据清理脚本
+    ├── clean-volumes.sh           # 数据清理脚本
+    ├── switch-logging-mode.sh     # 日志模式切换脚本
+    ├── enable-jaeger-tracing.sh   # Jaeger 追踪启用脚本
+    ├── diagnose-elk-full.sh       # ELK 栈完整诊断脚本
+    ├── diagnose-logstash.sh       # Logstash 诊断脚本
+    ├── cleanup-temp-files.sh      # 临时文件清理脚本
+    └── list-temp-files.sh         # 临时文件列表脚本
 ```
 
 ---
@@ -79,11 +83,11 @@ docker-compose up -d
 | `docker-compose-lightweight-full.yml` | 轻量级完整栈 | 4-6GB | 功能演示 ⭐ |
 | `docker-compose.yml` | 标准监控栈 | 1GB | 已有 Ceph |
 | `docker-compose-ceph-demo.yml` | Ceph Demo | 1GB | 仅 Ceph |
-| `docker-compose-logging.yml` | ELK 日志系统 | 1GB | 日志收集 |
-| `docker-compose-tracing.yml` | Jaeger 追踪 | 256MB | 分布式追踪 |
-| `docker-compose-full.yml` | 生产级完整 | 8GB+ | 生产环境 |
 
-**注意**: 每个 `.yml` 文件都有对应的 `.zh-CN.yml` 中文备份版本。
+**说明**:
+- 每个 `.yml` 文件都有对应的 `.yml.zh-CN` 中文备份版本
+- `docker-compose-lightweight-full.yml` 包含完整的监控栈（Ceph Demo + 监控 + ELK + Jaeger）
+- 如需单独的 ELK 或 Jaeger 配置，可以从 `docker-compose-lightweight-full.yml` 中提取相关服务
 
 ---
 
@@ -340,4 +344,4 @@ sudo ./scripts/deploy.sh verify
 
 ---
 
-**最后更新**: 2026-03-09
+**最后更新**: 2026-03-15

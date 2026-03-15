@@ -44,8 +44,15 @@ sudo tee /etc/docker/daemon.json <<EOF
 {
   "registry-mirrors": [
     "https://docker.mirrors.ustc.edu.cn",
-    "https://hub-mirror.c.163.com"
-  ]
+    "https://hub-mirror.c.163.com",
+    "https://mirror.ccs.tencentyun.com"
+  ],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "3"
+  },
+  "storage-driver": "overlay2"
 }
 EOF
 sudo systemctl restart docker
@@ -290,5 +297,5 @@ docker exec prometheus date
 
 ---
 
-**版本**: 2.1
-**最后更新**: 2026-03-09
+**版本**: 2.2
+**最后更新**: 2026-03-15

@@ -124,6 +124,10 @@ func (c *MonitorCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, mon := range monitors {
+		// 调试日志
+		c.log.WithComponent("monitor-collector").Debugf("Monitor %s: InQuorum=%v, boolToFloat64=%f",
+			mon.Name, mon.InQuorum, boolToFloat64(mon.InQuorum))
+
 		ch <- prometheus.MustNewConstMetric(c.inQuorum, prometheus.GaugeValue,
 			boolToFloat64(mon.InQuorum), mon.Name)
 		ch <- prometheus.MustNewConstMetric(c.storeBytes, prometheus.GaugeValue,

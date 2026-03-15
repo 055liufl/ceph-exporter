@@ -370,8 +370,8 @@ services:
     # -------------------------------------------------------------------------
     volumes:
       # Prometheus 配置文件 (只读)
-      # 使用标准配置文件
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # 使用中文配置文件（包含中文告警规则）
+      - ./prometheus/prometheus.zh-CN.yml:/etc/prometheus/prometheus.yml:ro
 
       # Prometheus 数据卷 (测试专用)
       # 存储测试期间的时序数据
@@ -488,6 +488,10 @@ services:
 
       # GF_AUTH_ANONYMOUS_ENABLED: 禁用匿名访问
       - GF_AUTH_ANONYMOUS_ENABLED=false
+
+      # GF_DEFAULT_LOCALE: 默认界面语言
+      # zh-CN: 简体中文界面
+      - GF_DEFAULT_LOCALE=zh-CN
 
     # -------------------------------------------------------------------------
     # 网络配置

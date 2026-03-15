@@ -1,0 +1,135 @@
+# =============================================================================
+# Alertmanager 配置文件
+# =============================================================================
+# 本文件定义告警的路由、分组、抑制和通知渠道。
+#
+# 告警处理流程：
+#   1. Prometheus 根据规则触发告警并发送到 Alertmanager
+#   2. Alertmanager 根据路由规则（route）匹配告警到对应的接收者
+#   3. 同一分组中的告警会被聚合，避免告警风暴
+#   4. inhibit_rules 定义告警抑制关系（高级别告警抑制低级别）
+#   5. 通过 receivers 中配置的渠道发送通知
+#
+# 通知渠道（根据实际环境配置）：
+#   - webhook:  Webhook 通知（默认，可对接企业微信、钉钉等）
+#   - email:    邮件通知（需要 SMTP 配置）
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 全局配置
+# -----------------------------------------------------------------------------
+global:
+  # 告警恢复等待时间
+  # 告警消失后，等待这段时间再发送恢复通知，避免告警抖动
+  resolve_timeout: 5m
+
+  # SMTP 邮件配置（如需邮件通知，取消注释并填入实际值）
+  # smtp_smarthost: "smtp.example.com:587"
+  # smtp_from: "alertmanager@example.com"
+  # smtp_auth_username: "alertmanager@example.com"
+  # smtp_auth_password: "password"
+  # smtp_require_tls: true
+
+# -----------------------------------------------------------------------------
+# 通知模板
+# -----------------------------------------------------------------------------
+# templates:
+#   - "/etc/alertmanager/templates/*.tmpl"
+
+# -----------------------------------------------------------------------------
+# 路由规则
+# -----------------------------------------------------------------------------
+# 定义告警如何被路由到不同的通知渠道
+route:
+  # 分组依据：按 alertname（告警名称）和 component 分组
+  # 同一分组内的告警会被聚合为一条通知
+  group_by: ["alertname", "component"]
+
+  # 初始告警等待时间
+  # 收到新告警后，等待 30 秒收集同组的其他告警再发送
+  group_wait: 30s
+
+  # 同组告警发送间隔
+  # 同一分组后续通知的发送间隔（避免频繁发送）
+  group_interval: 5m
+
+  # 重复通知间隔
+  # 已发送的告警如果持续存在，每 4 小时重复通知一次
+  repeat_interval: 4h
+
+  # 默认接收者
+  receiver: "default-webhook"
+
+  # 子路由规则（按优先级从上到下匹配）
+  routes:
+    # 紧急告警路由：severity=emergency 或 severity=critical
+    # 缩短等待时间，快速发送通知
+    - match_re:
+        severity: "critical|emergency"
+      receiver: "critical-webhook"
+      group_wait: 10s          # 紧急告警只等待 10 秒
+      repeat_interval: 1h     # 每小时重复通知一次
+
+    # OSD 相关告警路由
+    - match:
+        component: "osd"
+      receiver: "default-webhook"
+      group_by: ["alertname", "osd"]
+
+    # 容量相关告警路由
+    - match:
+        component: "capacity"
+      receiver: "default-webhook"
+      repeat_interval: 2h     # 容量告警每 2 小时重复一次
+
+# -----------------------------------------------------------------------------
+# 抑制规则
+# -----------------------------------------------------------------------------
+# 当高级别告警存在时，抑制同类型的低级别告警，减少告警噪音
+inhibit_rules:
+  # 规则 1：critical 告警抑制同组件的 warning 告警
+  # 例如：当 CephClusterError（critical）存在时，抑制 CephClusterWarning（warning）
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    # 仅当 source 和 target 的 component 标签相同时才抑制
+    equal: ["component"]
+
+  # 规则 2：emergency 告警抑制同组件的 critical 和 warning 告警
+  - source_match:
+      severity: "emergency"
+    target_match_re:
+      severity: "critical|warning"
+    equal: ["component"]
+
+# -----------------------------------------------------------------------------
+# 接收者定义
+# -----------------------------------------------------------------------------
+receivers:
+  # 默认 Webhook 接收者
+  # 将告警以 JSON 格式 POST 到指定 URL
+  # 可对接企业微信机器人、钉钉机器人、自定义告警处理服务等
+  - name: "default-webhook"
+    webhook_configs:
+      - url: "http://localhost:5001/webhook/alerts"
+        send_resolved: true    # 告警恢复时也发送通知
+        http_config:
+          basic_auth:
+            username: ""
+            password: ""
+
+  # 严重告警 Webhook 接收者
+  # 用于接收 critical 和 emergency 级别的告警
+  - name: "critical-webhook"
+    webhook_configs:
+      - url: "http://localhost:5001/webhook/critical"
+        send_resolved: true
+
+  # 邮件接收者（示例，需在 global 中设置 SMTP）
+  # - name: "email-alerts"
+  #   email_configs:
+  #     - to: "ops-team@example.com"
+  #       send_resolved: true
+  #       headers:
+  #         Subject: "[Ceph 告警] {{ .GroupLabels.alertname }}"

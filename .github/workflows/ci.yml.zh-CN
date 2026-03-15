@@ -1,0 +1,102 @@
+# =============================================================================
+# GitHub Actions CI 工作流
+# =============================================================================
+# 本工作流在代码推送或 PR 时自动执行构建和测试。
+#
+# 触发条件：
+#   - 推送到 main 或 develop 分支
+#   - 针对 main 或 develop 分支的 Pull Request
+#
+# 工作内容：
+#   1. 构建和测试：在多个 Go 版本上构建并运行单元测试
+#   2. 代码检查：使用 golangci-lint 进行代码质量检查
+#   3. 覆盖率上传：将测试覆盖率报告上传到 Codecov
+# =============================================================================
+
+name: CI
+
+# 触发条件
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ===========================================================================
+  # 构建和测试任务
+  # ===========================================================================
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 在多个 Go 版本上测试，确保兼容性
+        go-version: ['1.21', '1.22']
+
+    steps:
+      # 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 设置 Go 环境
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true                                   # 启用依赖缓存
+          cache-dependency-path: ceph-exporter/go.sum   # 缓存依赖路径
+
+      # 下载 Go 依赖
+      - name: Download dependencies
+        working-directory: ./ceph-exporter
+        run: go mod download
+
+      # 构建项目
+      - name: Build
+        working-directory: ./ceph-exporter
+        run: go build -v ./...
+
+      # 运行测试
+      # -v: 详细输出
+      # -race: 启用竞态检测
+      # -coverprofile: 生成覆盖率报告
+      - name: Run tests
+        working-directory: ./ceph-exporter
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      # 上传覆盖率报告到 Codecov（仅在 Go 1.21 上执行一次）
+      - name: Upload coverage
+        if: matrix.go-version == '1.21'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./ceph-exporter/coverage.out
+          flags: unittests
+          fail_ci_if_error: false                       # 上传失败不影响 CI
+
+  # ===========================================================================
+  # 代码检查任务
+  # ===========================================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      # 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 设置 Go 环境
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: ceph-exporter/go.sum
+
+      # 运行 golangci-lint 代码检查
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest                               # 使用最新版本
+          working-directory: ceph-exporter
+          args: --config ../.golangci.yml --timeout 5m  # 配置文件和超时时间

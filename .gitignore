@@ -29,3 +29,11 @@ ceph-exporter/deployments/data/
 
 # Images
 images/
+
+# Terminal session recordings
+typescript
+*.typescript
+
+# Additional temporary files
+*.tmp
+*.temp

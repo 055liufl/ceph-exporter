@@ -1,6 +1,6 @@
 # Pre-commit SSL 问题修复指南
 
-**最后更新**: 2026-03-07
+**最后更新**: 2026-03-15
 
 ---
 
@@ -329,4 +329,4 @@ pre-commit run --config .pre-commit-config-simple.yaml --all-files
 ---
 
 **文档版本**: 1.0
-**最后更新**: 2026-03-07
+**最后更新**: 2026-03-15

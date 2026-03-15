@@ -38,8 +38,15 @@ sudo tee /etc/docker/daemon.json <<EOF
 {
   "registry-mirrors": [
     "https://docker.mirrors.ustc.edu.cn",
-    "https://hub-mirror.c.163.com"
-  ]
+    "https://hub-mirror.c.163.com",
+    "https://mirror.ccs.tencentyun.com"
+  ],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "3"
+  },
+  "storage-driver": "overlay2"
 }
 EOF
 sudo systemctl restart docker
@@ -82,11 +89,23 @@ curl http://localhost:3000
 
 ## 服务访问
 
+### 基础监控服务
+
 | 服务 | 地址 | 凭据 |
 |------|------|------|
 | Ceph Exporter | http://localhost:9128/metrics | - |
 | Prometheus | http://localhost:9090 | - |
 | Grafana | http://localhost:3000 | admin/admin |
+| Alertmanager | http://localhost:9093 | - |
+
+### 完整监控栈 (full 模式)
+
+| 服务 | 地址 | 凭据 | 说明 |
+|------|------|------|------|
+| Ceph Dashboard | http://localhost:8080 | - | Ceph 管理界面 |
+| Elasticsearch | http://localhost:9200 | - | 日志存储 |
+| Kibana | http://localhost:5601 | - | 日志查询和可视化 |
+| Jaeger UI | http://localhost:16686 | - | 分布式追踪界面 |
 
 ---
 
@@ -159,4 +178,4 @@ docker info | grep -A 5 "Registry Mirrors"
 ---
 
 **版本**: 2.0
-**最后更新**: 2026-03-09
+**最后更新**: 2026-03-15

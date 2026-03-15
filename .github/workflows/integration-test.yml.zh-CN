@@ -1,0 +1,85 @@
+# =============================================================================
+# GitHub Actions 集成测试工作流
+# =============================================================================
+# 本工作流在代码推送或 PR 时自动执行集成测试。
+#
+# 触发条件：
+#   - 推送到 main 或 develop 分支
+#   - 针对 main 或 develop 分支的 Pull Request
+#
+# 工作内容：
+#   1. 使用 Docker Compose 启动完整的测试环境
+#   2. 运行集成测试（测试 ceph-exporter 与真实 Ceph 集群的交互）
+#   3. 测试失败时收集日志并上传
+#   4. 清理测试环境
+# =============================================================================
+
+name: Integration Tests
+
+# 触发条件
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ===========================================================================
+  # 集成测试任务
+  # ===========================================================================
+  integration-test:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      # 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 设置 Go 环境
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: ceph-exporter/test/integration/go.sum
+
+      # 安装 Docker Compose
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      # 验证 Docker 安装
+      - name: Verify Docker installation
+        run: |
+          docker --version
+          docker-compose --version
+
+      # 运行集成测试
+      # -v: 详细输出
+      # -timeout 30m: 设置 30 分钟超时（集成测试可能较慢）
+      - name: Run integration tests
+        working-directory: ./ceph-exporter/test/integration
+        run: go test -v -timeout 30m
+
+      # 测试失败时收集日志
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker-compose -f ceph-exporter/deployments/docker-compose.yml logs > integration-test-logs.txt
+
+      # 上传日志文件（仅在测试失败时）
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: integration-test-logs.txt
+
+      # 清理测试环境（总是执行）
+      # -v: 同时删除 volumes
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f ceph-exporter/deployments/docker-compose.yml down -v || true

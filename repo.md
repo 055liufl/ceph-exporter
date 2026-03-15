@@ -1,6 +1,6 @@
 # CentOS 7 国内镜像源配置指南
 
-> 验证时间：2026-03-06
+> 验证时间：2026-03-15
 >
 > **重要提示**：CentOS 7 已于 2024年6月30日 停止维护，部分镜像站已将其移至 vault 目录。
 
@@ -267,5 +267,5 @@ sudo rpm --import https://mirrors.aliyun.com/epel/RPM-GPG-KEY-EPEL-7
 
 ---
 
-**最后更新**：2026-03-06
+**最后更新**：2026-03-15
 **推荐配置**：阿里云 CentOS Base + 阿里云 EPEL

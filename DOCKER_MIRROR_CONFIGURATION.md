@@ -207,5 +207,5 @@ sudo systemctl restart docker
 ---
 
 **文档版本**: 2.0
-**最后更新**: 2026-03-07
+**最后更新**: 2026-03-15
 **维护者**: ceph-exporter 项目团队

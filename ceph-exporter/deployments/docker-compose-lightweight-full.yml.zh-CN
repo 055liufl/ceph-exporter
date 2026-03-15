@@ -315,6 +315,12 @@ services:
       # monitor-network: 连接到监控组件
       - monitor-network
 
+      # tracing-network: 连接到追踪系统
+      - tracing-network
+
+      # logging-network: 连接到日志系统
+      - logging-network
+
     # -------------------------------------------------------------------------
     # 数据卷挂载
     # -------------------------------------------------------------------------
@@ -391,8 +397,8 @@ services:
     # -------------------------------------------------------------------------
     volumes:
       - ./data/prometheus:/prometheus
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./prometheus/prometheus.zh-CN.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.zh-CN.yml:/etc/prometheus/alert_rules.yml:ro
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
@@ -446,6 +452,10 @@ services:
       # GF_INSTALL_PLUGINS: 安装的插件
       # 空值表示不安装额外插件,减少启动时间
       - GF_INSTALL_PLUGINS=
+
+      # GF_DEFAULT_LOCALE: 默认界面语言
+      # zh-CN: 简体中文界面
+      - GF_DEFAULT_LOCALE=zh-CN
 
     # -------------------------------------------------------------------------
     # 网络配置
@@ -521,7 +531,7 @@ services:
     # -------------------------------------------------------------------------
     volumes:
       - ./data/alertmanager:/alertmanager
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/alertmanager.zh-CN.yml:/etc/alertmanager/alertmanager.yml:ro
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
@@ -683,15 +693,19 @@ services:
     # -------------------------------------------------------------------------
     environment:
       # LS_JAVA_OPTS: Logstash JVM 参数
-      # -Xms128m: 初始堆内存 128MB
-      # -Xmx128m: 最大堆内存 128MB
-      # 轻量级配置,标准配置建议 512MB 或更多
-      - "LS_JAVA_OPTS=-Xms128m -Xmx128m"
+      # -Xms512m: 初始堆内存 512MB
+      # -Xmx512m: 最大堆内存 512MB
+      # 标准配置，确保稳定运行
+      - "LS_JAVA_OPTS=-Xms512m -Xmx512m"
 
     # -------------------------------------------------------------------------
     # 数据卷挂载
     # -------------------------------------------------------------------------
     volumes:
+      # Logstash 配置文件挂载 (只读)
+      # 定义日志处理管道
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+
       # 时区配置挂载 (只读)
       # 确保容器时间与宿主机一致，用于准确的日志时间戳
       - /etc/localtime:/etc/localtime:ro
@@ -844,6 +858,11 @@ services:
       # Zipkin 是另一个流行的追踪系统,Jaeger 兼容其协议
       - COLLECTOR_ZIPKIN_HOST_PORT=:9411
 
+      # COLLECTOR_OTLP_ENABLED: 启用 OTLP 收集器
+      # true: 启用 OpenTelemetry Protocol (OTLP) 支持
+      # OTLP 是 OpenTelemetry 的标准协议，支持 HTTP 和 gRPC
+      - COLLECTOR_OTLP_ENABLED=true
+
       # MEMORY_MAX_TRACES: 内存中保留的最大追踪数量
       # 1000: 轻量级配置,限制内存使用
       # 标准配置可以设置更大值或使用持久化存储
@@ -876,6 +895,11 @@ services:
       # 14268: 接收追踪数据的 HTTP 端口
       # 客户端可以通过此端口发送追踪数据
       - "14268:14268"
+
+      # OTLP HTTP 端口
+      # 4318: OpenTelemetry Protocol HTTP 端口
+      # 用于接收 OTLP 格式的追踪数据
+      - "4318:4318"
 
       # Jaeger Compact Thrift 端口
       # 6831/udp: UDP 协议端口
