@@ -71,7 +71,18 @@
 1. **deployments/scripts/switch-logging-mode.sh**
    - 一键切换日志模式
    - 自动备份配置
+   - 自动管理 filebeat-sidecar（container 模式启动，direct 模式停止）
    - 彩色输出，友好提示
+
+2. **deployments/filebeat/filebeat.yml**
+   - Filebeat sidecar 容器日志收集配置
+   - 通过 Docker socket 采集 ceph-exporter 容器日志
+   - 过滤只保留 ceph-exporter 容器日志
+
+3. **deploy.sh full 日志方案集成**
+   - 部署时交互式选择日志方案（container/direct/direct-udp/file/dev）
+   - 支持 `LOGGING_MODE` 环境变量跳过交互
+   - container 模式自动启动 filebeat-sidecar，其他模式不启动
 
 ---
 
@@ -130,7 +141,21 @@ logger:
 
 ## 快速切换
 
-### 使用脚本切换
+### 使用 deploy.sh 部署时选择
+
+```bash
+# 交互式选择日志方案
+./scripts/deploy.sh full
+
+# 通过环境变量指定（跳过交互）
+LOGGING_MODE=container ./scripts/deploy.sh full     # 容器日志收集（推荐）
+LOGGING_MODE=direct ./scripts/deploy.sh full        # 直接推送 TCP
+LOGGING_MODE=direct-udp ./scripts/deploy.sh full    # 直接推送 UDP
+LOGGING_MODE=file ./scripts/deploy.sh full          # 文件日志
+LOGGING_MODE=dev ./scripts/deploy.sh full           # 开发模式
+```
+
+### 运行中使用脚本切换
 
 ```bash
 # 切换到方案1（TCP）
@@ -157,10 +182,10 @@ logger:
 sed -i 's/enable_elk: true/enable_elk: false/' configs/ceph-exporter.yaml
 
 # 启动 Filebeat
-docker-compose up -d filebeat-sidecar
+docker-compose -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
 
 # 重启服务
-docker-compose restart ceph-exporter
+docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 ```
 
 **方案2 → 方案1:**
@@ -169,10 +194,10 @@ docker-compose restart ceph-exporter
 sed -i 's/enable_elk: false/enable_elk: true/' configs/ceph-exporter.yaml
 
 # 重启服务
-docker-compose restart ceph-exporter
+docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 
 # 停止 Filebeat（可选）
-docker-compose stop filebeat-sidecar
+docker-compose -f docker-compose-lightweight-full.yml stop filebeat-sidecar
 ```
 
 ---

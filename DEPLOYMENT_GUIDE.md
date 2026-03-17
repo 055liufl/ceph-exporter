@@ -81,8 +81,12 @@ sudo systemctl stop firewalld
 cd ceph-exporter/deployments
 chmod +x scripts/deploy.sh
 
-# 完整部署（自动初始化数据目录）
+# 完整部署（自动初始化数据目录，交互式选择日志方案）
 ./scripts/deploy.sh full
+
+# 或指定日志方案（跳过交互）
+LOGGING_MODE=container ./scripts/deploy.sh full   # 容器日志收集（推荐）
+LOGGING_MODE=direct ./scripts/deploy.sh full      # 直接推送到 Logstash
 ```
 
 **数据存储说明**:

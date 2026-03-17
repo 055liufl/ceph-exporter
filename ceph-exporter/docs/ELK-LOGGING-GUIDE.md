@@ -52,6 +52,48 @@ ceph-exporter (stdout) --> Filebeat --> Logstash --> Elasticsearch --> Kibana
 
 ## 快速开始
 
+### 使用 deploy.sh 部署（推荐）
+
+`deploy.sh full` 部署时会交互式选择日志方案，也支持通过环境变量指定：
+
+```bash
+cd ceph-exporter/deployments
+
+# 交互式选择日志方案
+./scripts/deploy.sh full
+
+# 或通过环境变量指定
+LOGGING_MODE=container ./scripts/deploy.sh full     # 容器日志收集（推荐）
+LOGGING_MODE=direct ./scripts/deploy.sh full        # 直接推送 TCP
+LOGGING_MODE=direct-udp ./scripts/deploy.sh full    # 直接推送 UDP
+LOGGING_MODE=file ./scripts/deploy.sh full          # 文件日志
+LOGGING_MODE=dev ./scripts/deploy.sh full           # 开发模式
+```
+
+`container` 模式会自动启动 `filebeat-sidecar` 服务，其他模式不启动。
+
+### 运行中切换日志方案
+
+```bash
+# 切换到方案2（容器日志收集）- 自动启动 filebeat-sidecar
+./deployments/scripts/switch-logging-mode.sh container
+
+# 切换到方案1（直接推送 TCP）- 自动停止 filebeat-sidecar
+./deployments/scripts/switch-logging-mode.sh direct
+
+# 切换到方案1（直接推送 UDP）- 自动停止 filebeat-sidecar
+./deployments/scripts/switch-logging-mode.sh direct-udp
+
+# 切换到文件日志模式
+./deployments/scripts/switch-logging-mode.sh file
+
+# 切换到开发模式
+./deployments/scripts/switch-logging-mode.sh dev
+
+# 查看当前配置
+./deployments/scripts/switch-logging-mode.sh show
+```
+
 ### 方案 1: 直接推送到 Logstash
 
 #### 1. 修改配置文件
@@ -169,30 +211,48 @@ spec:
 
 ## 配置切换
 
-### 从方案 2 切换到方案 1
+### 使用脚本切换（推荐）
+
+脚本会自动修改配置文件并管理 `filebeat-sidecar` 服务：
+
+```bash
+# 切换到方案1（TCP）- 自动停止 filebeat-sidecar
+./deployments/scripts/switch-logging-mode.sh direct
+
+# 切换到方案1（UDP）- 自动停止 filebeat-sidecar
+./deployments/scripts/switch-logging-mode.sh direct-udp
+
+# 切换到方案2（推荐）- 自动启动 filebeat-sidecar
+./deployments/scripts/switch-logging-mode.sh container
+
+# 切换后重启 ceph-exporter 以应用配置
+docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
+```
+
+### 手动切换：从方案 2 切换到方案 1
 
 ```bash
 # 1. 修改配置
 sed -i 's/enable_elk: false/enable_elk: true/' configs/ceph-exporter.yaml
 
 # 2. 重启服务
-docker-compose restart ceph-exporter
+docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 
 # 3. 停止 Filebeat（可选）
-docker-compose stop filebeat-sidecar
+docker-compose -f docker-compose-lightweight-full.yml stop filebeat-sidecar
 ```
 
-### 从方案 1 切换到方案 2
+### 手动切换：从方案 1 切换到方案 2
 
 ```bash
 # 1. 修改配置
 sed -i 's/enable_elk: true/enable_elk: false/' configs/ceph-exporter.yaml
 
 # 2. 启动 Filebeat
-docker-compose up -d filebeat-sidecar
+docker-compose -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
 
 # 3. 重启服务
-docker-compose restart ceph-exporter
+docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 ```
 
 ---

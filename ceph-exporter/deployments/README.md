@@ -25,6 +25,8 @@ deployments/
 │   └── provisioning/             # 自动配置
 ├── logstash/                      # Logstash 配置
 │   └── logstash.conf
+├── filebeat/                      # Filebeat Sidecar 配置
+│   └── filebeat.yml              # 容器日志收集配置（方案2）
 └── scripts/                       # 部署和管理脚本
     ├── deploy.sh                  # 主部署脚本（支持 full/minimal/integration 等）
     ├── diagnose.sh                # 诊断脚本（检查服务状态和配置）
@@ -48,7 +50,12 @@ deployments/
 ```bash
 # 轻量级完整栈（推荐）
 # 会自动初始化 ./data/ 目录并设置正确的权限
+# 部署时可交互式选择日志收集方案（container/direct/direct-udp/file/dev）
 ./scripts/deploy.sh full
+
+# 或通过环境变量指定日志方案（跳过交互）
+LOGGING_MODE=container ./scripts/deploy.sh full     # 容器日志收集（推荐）
+LOGGING_MODE=direct ./scripts/deploy.sh full        # 直接推送到 Logstash (TCP)
 
 # 或手动部署
 # 1. 初始化数据目录（会自动设置权限和创建软链接）
@@ -104,8 +111,15 @@ docker-compose up -d
 # 初始化数据目录
 ./scripts/deploy.sh init
 
-# 完整部署（推荐）
+# 完整部署（推荐，会交互式选择日志方案）
 ./scripts/deploy.sh full
+
+# 完整部署 - 指定日志方案（跳过交互选择）
+LOGGING_MODE=container ./scripts/deploy.sh full     # 容器日志收集（推荐）
+LOGGING_MODE=direct ./scripts/deploy.sh full        # 直接推送到 Logstash (TCP)
+LOGGING_MODE=direct-udp ./scripts/deploy.sh full    # 直接推送到 Logstash (UDP)
+LOGGING_MODE=file ./scripts/deploy.sh full          # 文件日志 + Filebeat
+LOGGING_MODE=dev ./scripts/deploy.sh full           # 开发模式
 
 # 集成测试环境
 ./scripts/deploy.sh integration
@@ -199,6 +213,16 @@ sudo ./scripts/fix-deployment.sh
 ### Logstash 配置
 
 - **logstash.conf**: 日志处理管道配置
+
+### Filebeat 配置
+
+- **filebeat/filebeat.yml**: Filebeat sidecar 容器日志收集配置（方案2: 容器日志收集）
+
+### 日志方案切换
+
+使用 `switch-logging-mode.sh` 脚本可快速切换日志收集方案，详见 [日志切换说明](scripts/README-switch-logging.md)。
+
+`deploy.sh full` 部署时会交互式选择日志方案，`container` 模式会自动启动 `filebeat-sidecar` 服务。
 
 ---
 

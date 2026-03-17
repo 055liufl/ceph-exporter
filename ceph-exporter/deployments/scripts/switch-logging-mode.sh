@@ -22,12 +22,64 @@ DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
 
 CONFIG_FILE="$DEPLOY_DIR/configs/ceph-exporter.yaml"
 BACKUP_FILE="$DEPLOY_DIR/configs/ceph-exporter.yaml.bak"
+COMPOSE_FILE="$DEPLOY_DIR/docker-compose-lightweight-full.yml"
 
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# 检测 docker-compose 命令
+detect_compose_cmd() {
+    if command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
+    elif docker compose version &> /dev/null 2>&1; then
+        COMPOSE_CMD="docker compose"
+    else
+        COMPOSE_CMD=""
+    fi
+}
+
+# 启动 filebeat-sidecar
+start_filebeat_sidecar() {
+    detect_compose_cmd
+    if [ -z "$COMPOSE_CMD" ]; then
+        echo -e "${YELLOW}!${NC} 未检测到 docker-compose，请手动启动 filebeat-sidecar"
+        return
+    fi
+
+    if [ ! -f "$COMPOSE_FILE" ]; then
+        echo -e "${YELLOW}!${NC} 未找到 $COMPOSE_FILE，请手动启动 filebeat-sidecar"
+        return
+    fi
+
+    echo -e "${GREEN}✓${NC} 启动 filebeat-sidecar..."
+    cd "$DEPLOY_DIR"
+    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d filebeat-sidecar 2>/dev/null || {
+        echo -e "${YELLOW}!${NC} filebeat-sidecar 启动失败，请手动启动"
+    }
+}
+
+# 停止 filebeat-sidecar
+stop_filebeat_sidecar() {
+    detect_compose_cmd
+    if [ -z "$COMPOSE_CMD" ]; then
+        return
+    fi
+
+    if [ ! -f "$COMPOSE_FILE" ]; then
+        return
+    fi
+
+    # 检查 filebeat-sidecar 是否在运行
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "filebeat-sidecar"; then
+        echo -e "${GREEN}✓${NC} 停止 filebeat-sidecar（直接推送模式不需要）..."
+        cd "$DEPLOY_DIR"
+        ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml stop filebeat-sidecar 2>/dev/null || true
+        ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml rm -f filebeat-sidecar 2>/dev/null || true
+    fi
+}
 
 # 显示使用说明
 usage() {
@@ -79,8 +131,13 @@ switch_to_direct_tcp() {
     echo "  - logstash_protocol: tcp"
     echo "  - output: stdout"
     echo ""
+
+    # 停止不需要的 filebeat-sidecar
+    stop_filebeat_sidecar
+
+    echo ""
     echo "重启服务以应用配置:"
-    echo "  docker-compose restart ceph-exporter"
+    echo "  docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter"
 }
 
 # 切换到方案1: 直接推送 (UDP)
@@ -98,8 +155,13 @@ switch_to_direct_udp() {
     echo "  - logstash_protocol: udp"
     echo "  - output: stdout"
     echo ""
+
+    # 停止不需要的 filebeat-sidecar
+    stop_filebeat_sidecar
+
+    echo ""
     echo "重启服务以应用配置:"
-    echo "  docker-compose restart ceph-exporter"
+    echo "  docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter"
 }
 
 # 切换到方案2: 容器日志收集
@@ -118,11 +180,13 @@ switch_to_container() {
     echo "  - output: stdout"
     echo "  - format: json"
     echo ""
-    echo "确保 Filebeat 正在运行:"
-    echo "  docker-compose up -d filebeat-sidecar"
+
+    # 自动启动 filebeat-sidecar
+    start_filebeat_sidecar
+
     echo ""
     echo "重启服务以应用配置:"
-    echo "  docker-compose restart ceph-exporter"
+    echo "  docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter"
 }
 
 # 切换到方案3: 文件日志

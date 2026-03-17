@@ -257,6 +257,7 @@ pull_images() {
         "docker.elastic.co/elasticsearch/elasticsearch:7.17.0"
         "docker.elastic.co/logstash/logstash:7.17.0"
         "docker.elastic.co/kibana/kibana:7.17.0"
+        "docker.elastic.co/beats/filebeat:7.17.0"
         "jaegertracing/all-in-one:1.35"
     )
 
@@ -387,7 +388,49 @@ deploy_full() {
     [ -d "data/ceph-demo/config" ] && sudo chmod -R 755 data/ceph-demo/config 2>/dev/null || true
 
     cd "$DEPLOY_DIR"
-    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d
+
+    # 选择日志方案
+    local logging_mode="${LOGGING_MODE:-}"
+    if [ -z "$logging_mode" ]; then
+        echo ""
+        echo -e "${YELLOW}请选择日志收集方案:${NC}"
+        echo "  1) container  - 容器日志收集（推荐，通过 Filebeat sidecar 采集）"
+        echo "  2) direct     - 直接推送到 Logstash (TCP，无需 Filebeat)"
+        echo "  3) direct-udp - 直接推送到 Logstash (UDP，高性能)"
+        echo "  4) file       - 文件日志 + Filebeat（日志持久化）"
+        echo "  5) dev        - 开发模式（stdout + text，方便调试）"
+        echo ""
+        read -p "请输入选项 [1]: " logging_choice
+        case "${logging_choice:-1}" in
+            1|container)
+                logging_mode="container"
+                ;;
+            2|direct)
+                logging_mode="direct"
+                ;;
+            3|direct-udp)
+                logging_mode="direct-udp"
+                ;;
+            4|file)
+                logging_mode="file"
+                ;;
+            5|dev)
+                logging_mode="dev"
+                ;;
+            *)
+                logging_mode="container"
+                ;;
+        esac
+    fi
+
+    # 应用日志方案配置
+    log_info "应用日志方案: $logging_mode"
+    "$SCRIPT_DIR/switch-logging-mode.sh" "$logging_mode"
+
+    # 启动核心服务（不包含 filebeat-sidecar）
+    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d \
+        ceph-demo ceph-exporter prometheus grafana alertmanager \
+        elasticsearch logstash kibana jaeger
 
     log_info "等待 Elasticsearch 启动..."
     sleep 30
@@ -409,6 +452,17 @@ deploy_full() {
     # 重启 ceph-exporter 以应用权限修复和网络配置
     log_info "重启 ceph-exporter 服务..."
     ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d ceph-exporter
+
+    # 根据日志方案决定是否启动 filebeat-sidecar
+    if [ "$logging_mode" = "container" ]; then
+        log_info "启动 Filebeat sidecar（容器日志收集模式）..."
+        ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
+    else
+        log_info "当前日志方案: $logging_mode，不需要 Filebeat sidecar"
+        # 确保 filebeat-sidecar 未运行
+        ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml stop filebeat-sidecar 2>/dev/null || true
+        ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml rm -f filebeat-sidecar 2>/dev/null || true
+    fi
 
     log_info "等待所有服务就绪..."
     sleep 20
@@ -712,6 +766,13 @@ show_help() {
 示例:
   # 完整部署（推荐，包含中文界面）
   ./deploy.sh full
+
+  # 完整部署 - 指定日志方案（跳过交互选择）
+  LOGGING_MODE=container ./deploy.sh full     # 容器日志收集（推荐）
+  LOGGING_MODE=direct ./deploy.sh full        # 直接推送到 Logstash (TCP)
+  LOGGING_MODE=direct-udp ./deploy.sh full    # 直接推送到 Logstash (UDP)
+  LOGGING_MODE=file ./deploy.sh full          # 文件日志 + Filebeat
+  LOGGING_MODE=dev ./deploy.sh full           # 开发模式
 
   # 标准部署（连接现有 Ceph 集群）
   ./deploy.sh minimal

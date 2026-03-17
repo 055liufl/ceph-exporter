@@ -58,8 +58,14 @@ sudo systemctl restart docker
 cd ceph-exporter/deployments
 chmod +x scripts/deploy.sh
 
-# 自动部署（会自动初始化数据目录）
+# 自动部署（会自动初始化数据目录，交互式选择日志方案）
 ./scripts/deploy.sh full
+```
+
+**提示**: 部署时会提示选择日志收集方案，也可以通过环境变量跳过交互：
+```bash
+LOGGING_MODE=container ./scripts/deploy.sh full   # 容器日志收集（推荐）
+LOGGING_MODE=direct ./scripts/deploy.sh full      # 直接推送到 Logstash
 ```
 
 **注意**: 部署脚本会自动创建 `./data/` 目录用于存储所有服务数据，包括：

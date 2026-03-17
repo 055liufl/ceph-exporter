@@ -134,8 +134,12 @@ Ceph-Exporter 是一个基于 Go 语言开发的 **Ceph 集群 Prometheus 指标
 # 进入部署目录
 cd /home/lfl/ceph-exporter/ceph-exporter/deployments
 
-# 完整监控栈部署（推荐）
+# 完整监控栈部署（推荐，部署时交互式选择日志方案）
 ./scripts/deploy.sh full
+
+# 或指定日志方案（跳过交互）
+LOGGING_MODE=container ./scripts/deploy.sh full   # 容器日志收集（推荐）
+LOGGING_MODE=direct ./scripts/deploy.sh full      # 直接推送到 Logstash
 
 # 等待服务启动（约 2-3 分钟）
 ./scripts/deploy.sh status

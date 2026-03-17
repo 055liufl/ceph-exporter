@@ -10,12 +10,30 @@
 ║  方案1: 直接推送 (Direct Push)                                     ║
 ║  ├─ 适用: 小规模、实时性要求高                                     ║
 ║  ├─ 配置: enable_elk: true                                        ║
-║  └─ 命令: ./deployments/scripts/switch-logging-mode.sh direct                ║
+║  ├─ filebeat-sidecar: 不启动                                      ║
+║  └─ 命令: ./deployments/scripts/switch-logging-mode.sh direct     ║
 ║                                                                   ║
 ║  方案2: 容器日志收集 (Container Log) - 推荐                        ║
 ║  ├─ 适用: 生产环境、Kubernetes                                     ║
 ║  ├─ 配置: enable_elk: false, output: stdout                       ║
-║  └─ 命令: ./deployments/scripts/switch-logging-mode.sh container             ║
+║  ├─ filebeat-sidecar: 自动启动                                    ║
+║  └─ 命令: ./deployments/scripts/switch-logging-mode.sh container  ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  deploy.sh full 日志方案选择                                       ║
+╠═══════════════════════════════════════════════════════════════════╣
+║                                                                   ║
+║  # 交互式选择日志方案                                              ║
+║  $ ./scripts/deploy.sh full                                       ║
+║                                                                   ║
+║  # 通过环境变量指定（跳过交互）                                     ║
+║  $ LOGGING_MODE=container ./scripts/deploy.sh full  # 推荐        ║
+║  $ LOGGING_MODE=direct ./scripts/deploy.sh full     # TCP直推     ║
+║  $ LOGGING_MODE=direct-udp ./scripts/deploy.sh full # UDP直推     ║
+║  $ LOGGING_MODE=file ./scripts/deploy.sh full       # 文件日志    ║
+║  $ LOGGING_MODE=dev ./scripts/deploy.sh full        # 开发模式    ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
@@ -23,20 +41,23 @@
 ║  快速切换命令                                                      ║
 ╠═══════════════════════════════════════════════════════════════════╣
 ║                                                                   ║
-║  # 切换到方案1（TCP）                                              ║
-║  $ ./deployments/scripts/switch-logging-mode.sh direct                       ║
+║  # 切换到方案1（TCP）- 自动停止 filebeat-sidecar                   ║
+║  $ ./deployments/scripts/switch-logging-mode.sh direct            ║
 ║                                                                   ║
-║  # 切换到方案1（UDP）                                              ║
-║  $ ./deployments/scripts/switch-logging-mode.sh direct-udp                   ║
+║  # 切换到方案1（UDP）- 自动停止 filebeat-sidecar                   ║
+║  $ ./deployments/scripts/switch-logging-mode.sh direct-udp        ║
 ║                                                                   ║
-║  # 切换到方案2（推荐）                                             ║
-║  $ ./deployments/scripts/switch-logging-mode.sh container                    ║
+║  # 切换到方案2（推荐）- 自动启动 filebeat-sidecar                  ║
+║  $ ./deployments/scripts/switch-logging-mode.sh container         ║
+║                                                                   ║
+║  # 文件日志模式                                                    ║
+║  $ ./deployments/scripts/switch-logging-mode.sh file              ║
 ║                                                                   ║
 ║  # 开发模式                                                        ║
-║  $ ./deployments/scripts/switch-logging-mode.sh dev                          ║
+║  $ ./deployments/scripts/switch-logging-mode.sh dev               ║
 ║                                                                   ║
 ║  # 查看当前配置                                                    ║
-║  $ ./deployments/scripts/switch-logging-mode.sh show                         ║
+║  $ ./deployments/scripts/switch-logging-mode.sh show              ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
@@ -46,9 +67,8 @@
 ║                                                                   ║
 ║  主配置:     configs/ceph-exporter.yaml                           ║
 ║  示例配置:   configs/logger-examples.yaml                         ║
-║  Filebeat:   configs/filebeat.yml                                ║
+║  Filebeat:   deployments/filebeat/filebeat.yml                    ║
 ║  Logstash:   configs/logstash.conf                               ║
-║  Docker:     configs/docker-compose-elk.yaml                     ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
@@ -71,14 +91,20 @@
 ║  启动服务                                                          ║
 ╠═══════════════════════════════════════════════════════════════════╣
 ║                                                                   ║
-║  # 方案1: 直接推送                                                 ║
-║  $ docker-compose -f configs/docker-compose-elk.yaml up -d \     ║
-║      ceph-exporter-direct logstash elasticsearch kibana          ║
+║  # 推荐: 使用 deploy.sh（自动选择日志方案）                        ║
+║  $ ./scripts/deploy.sh full                                       ║
 ║                                                                   ║
-║  # 方案2: 容器日志收集                                             ║
-║  $ docker-compose -f configs/docker-compose-elk.yaml up -d \     ║
-║      ceph-exporter-sidecar filebeat-sidecar \                    ║
-║      logstash elasticsearch kibana                               ║
+║  # 方案1: 直接推送（不启动 filebeat-sidecar）                      ║
+║  $ LOGGING_MODE=direct ./scripts/deploy.sh full                   ║
+║                                                                   ║
+║  # 方案2: 容器日志收集（自动启动 filebeat-sidecar）                ║
+║  $ LOGGING_MODE=container ./scripts/deploy.sh full                ║
+║                                                                   ║
+║  # 手动启停 filebeat-sidecar                                       ║
+║  $ docker-compose -f docker-compose-lightweight-full.yml \        ║
+║      up -d filebeat-sidecar                                       ║
+║  $ docker-compose -f docker-compose-lightweight-full.yml \        ║
+║      stop filebeat-sidecar                                        ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 

@@ -1,0 +1,49 @@
+# =============================================================================
+# Filebeat Sidecar 配置 - 采集 ceph-exporter 容器日志
+# =============================================================================
+# 方案 2: 容器日志收集（推荐）
+# Filebeat 通过 Docker socket 采集 ceph-exporter 容器的标准输出日志
+# =============================================================================
+
+filebeat.inputs:
+# 采集 Docker 容器日志
+- type: container
+  enabled: true
+  paths:
+    - /var/lib/docker/containers/*/*.log
+  # 只采集 ceph-exporter 容器的日志
+  include_lines: []
+  # 解析 JSON 格式日志
+  json.keys_under_root: true
+  json.add_error_key: true
+  json.message_key: message
+  # 添加额外字段
+  fields:
+    service: ceph-exporter
+  fields_under_root: true
+
+# 处理器: 过滤只保留 ceph-exporter 容器日志
+processors:
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+  - drop_event:
+      when:
+        not:
+          equals:
+            container.name: "ceph-exporter"
+
+# -----------------------------------------------------------------------------
+# 输出到 Logstash
+# -----------------------------------------------------------------------------
+output.logstash:
+  hosts: ["logstash:5044"]
+  loadbalance: true
+  compression_level: 3
+  timeout: 30
+  bulk_max_size: 2048
+
+# -----------------------------------------------------------------------------
+# 日志级别
+# -----------------------------------------------------------------------------
+logging.level: info
+logging.to_stderr: true
