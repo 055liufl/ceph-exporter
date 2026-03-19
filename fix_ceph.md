@@ -157,7 +157,7 @@ CentOS 7 在 2024 年 6 月 30 日已经 EOL，官方 mirrorlist 服务已停止
 
 #### 解决步骤
 
-**步骤 1: 禁用有问题的仓库**
+**步骤 1: 禁用有问题的仓库;如果存在这些文件,也可以直接删除**
 ```bash
 sudo sed -i 's/^enabled=1/enabled=0/g' /etc/yum.repos.d/CentOS-NFS-Ganesha-28.repo
 sudo sed -i 's/^enabled=1/enabled=0/g' /etc/yum.repos.d/CentOS-fasttrack.repo
