@@ -48,11 +48,13 @@ COPY . .
 
 # 编译二进制文件
 # CGO_ENABLED=1: 启用 CGO 以支持 Ceph C 库绑定
+# -tags octopus: 匹配 Ceph 15.x (Octopus) 版本的构建标签
 # -ldflags: 注入版本信息
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
 ARG GIT_COMMIT=unknown
 RUN CGO_ENABLED=1 go build \
+    -tags octopus \
     -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}" \
     -o /app/build/ceph-exporter \
     ./cmd/ceph-exporter

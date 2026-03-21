@@ -1,6 +1,6 @@
 # Pre-commit 使用指南
 
-**最后更新**: 2026-03-15
+**最后更新**: 2026-03-21
 **适用环境**: CentOS 7 + Python
 
 ---
@@ -176,7 +176,28 @@ pre-commit install --config .pre-commit-config-simple.yaml
 make fmt lint test
 ```
 
-### Q3: 某些 hook 总是失败
+### Q3: end-of-file-fixer 因文件权限报错 (PermissionError)
+
+**错误信息**:
+```
+PermissionError: [Errno 13] Permission denied: 'ceph-exporter/deployments/filebeat/filebeat.yml'
+```
+
+**原因**: `filebeat.yml` 文件所有者为 `root`（部署需要），当前用户没有写权限，导致 `end-of-file-fixer` 无法修改该文件。
+
+**解决方案**: 在 `.pre-commit-config.yaml` 中为 `end-of-file-fixer` 添加 `exclude` 规则，跳过该文件：
+
+```yaml
+- id: end-of-file-fixer
+  exclude: 'ceph-exporter/deployments/filebeat/filebeat\.yml$'
+```
+
+> **注意**: 不要通过 `chown` 修改该文件权限，因为 `filebeat.yml` 必须保持 `root` 所有权，否则部署后服务会不断重启。如果其他部署文件也有类似权限要求，可以在 `exclude` 中用 `|` 添加多个路径，或排除整个目录：
+> ```yaml
+> exclude: 'ceph-exporter/deployments/(filebeat|其他目录)/.*\.yml$'
+> ```
+
+### Q4: 某些 hook 总是失败
 
 **解决方案**:
 ```bash
@@ -380,5 +401,5 @@ make fmt lint test
 ---
 
 **文档版本**: 1.0
-**最后更新**: 2026-03-15
+**最后更新**: 2026-03-21
 **建议**: 首次使用请运行 `./scripts/fix-precommit.sh`

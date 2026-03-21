@@ -13,7 +13,7 @@
 #   ./scripts/deploy.sh full
 #
 # Access URLs:
-#   - Ceph Dashboard: http://localhost:8080
+#   - Ceph RGW (S3 API): http://localhost:8080
 #   - Prometheus: http://localhost:9090
 #   - Grafana: http://localhost:3000 (admin/admin)
 #   - Elasticsearch: http://localhost:9200
@@ -22,7 +22,7 @@
 #   - Alertmanager: http://localhost:9093
 # =============================================================================
 
-version: "2.1"
+# =============================================================================
 
 services:
   # ===========================================================================
@@ -30,7 +30,7 @@ services:
   # ===========================================================================
 
   ceph-demo:
-    image: ceph/daemon:latest-nautilus
+    image: quay.io/ceph/daemon:latest-octopus
     container_name: ceph-demo
     hostname: ceph-demo
     environment:
@@ -56,7 +56,10 @@ services:
       - /etc/timezone:/etc/timezone:ro
     privileged: true
     restart: unless-stopped
-    mem_limit: 1024m
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
 
   # ===========================================================================
   # Monitoring Stack
@@ -83,7 +86,10 @@ services:
     restart: unless-stopped
     depends_on:
       - ceph-demo
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   prometheus:
     image: prom/prometheus:v2.51.0
@@ -106,7 +112,10 @@ services:
     restart: unless-stopped
     depends_on:
       - ceph-exporter
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   grafana:
     image: grafana/grafana:10.4.0
@@ -129,7 +138,10 @@ services:
     restart: unless-stopped
     depends_on:
       - prometheus
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   alertmanager:
     image: prom/alertmanager:v0.25.0
@@ -147,7 +159,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   # ===========================================================================
   # Filebeat Sidecar - 容器日志收集（方案2）
@@ -159,7 +174,7 @@ services:
     user: root
     volumes:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /home/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
@@ -169,7 +184,10 @@ services:
     depends_on:
       - logstash
       - ceph-exporter
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   # ===========================================================================
   # Logging Stack (ELK) - Lightweight configuration
@@ -192,7 +210,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   logstash:
     image: docker.elastic.co/logstash/logstash:7.17.0
@@ -211,7 +232,10 @@ services:
     restart: unless-stopped
     depends_on:
       - elasticsearch
-    mem_limit: 768m
+    deploy:
+      resources:
+        limits:
+          memory: 768m
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.0
@@ -230,7 +254,10 @@ services:
     restart: unless-stopped
     depends_on:
       - elasticsearch
-    mem_limit: 1024m
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
 
   # ===========================================================================
   # Tracing System (Jaeger)
@@ -255,7 +282,10 @@ services:
       - tracing-network
       - monitor-network
     restart: unless-stopped
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
 # =============================================================================
 # Network Configuration

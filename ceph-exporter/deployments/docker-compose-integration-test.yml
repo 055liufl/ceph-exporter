@@ -6,15 +6,16 @@
 # Resource Requirements: 2-3GB memory, 2 CPU cores
 # =============================================================================
 
-version: "2.1"
+# =============================================================================
 
 services:
   # Ceph Demo - Single-node Ceph cluster for testing
   ceph-demo:
-    image: ceph/demo:latest-nautilus
+    image: quay.io/ceph/daemon:latest-octopus
     container_name: ceph-demo-test
     hostname: ceph-demo
     environment:
+      - CEPH_DAEMON=demo
       - MON_IP=172.20.0.10
       - CEPH_PUBLIC_NETWORK=172.20.0.0/16
       - CEPH_DEMO_UID=demo
@@ -33,7 +34,10 @@ services:
       - /etc/timezone:/etc/timezone:ro
     privileged: true
     restart: unless-stopped
-    mem_limit: 1024m
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
 
   # ceph-exporter - Metrics collector
   ceph-exporter:
@@ -65,7 +69,10 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   # Prometheus - Time-series database
   prometheus:
@@ -93,7 +100,10 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   # Grafana - Visualization dashboard
   grafana:
@@ -122,7 +132,10 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
 networks:
   test-network:

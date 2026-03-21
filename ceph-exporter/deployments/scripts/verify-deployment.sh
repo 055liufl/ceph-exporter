@@ -431,7 +431,7 @@ show_access_info() {
     fi
 
     if docker ps --format '{{.Names}}' | grep -q "ceph-demo"; then
-        echo -e "${BLUE}🗄️  Ceph Dashboard：${NC}"
+        echo -e "${BLUE}🗄️  Ceph RGW (S3 对象存储 API)：${NC}"
         echo "   http://localhost:8080"
         echo ""
     fi
@@ -452,7 +452,7 @@ show_access_info() {
     fi
 
     if docker ps --format '{{.Names}}' | grep -q "ceph-demo"; then
-        echo "  Ceph Dashboard:  http://${server_ip}:8080"
+        echo "  Ceph RGW (S3):   http://${server_ip}:8080"
     fi
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

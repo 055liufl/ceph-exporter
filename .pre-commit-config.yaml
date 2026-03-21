@@ -9,6 +9,7 @@ repos:
       - id: trailing-whitespace
         args: ['--markdown-linebreak-ext=md']
       - id: end-of-file-fixer
+        exclude: 'ceph-exporter/deployments/filebeat/filebeat\.yml$'
       - id: check-yaml
         args: ['--allow-multiple-documents']
         exclude: '\.zh-CN\.(yaml|yml)$'
@@ -45,14 +46,14 @@ repos:
 
       - id: go-vet
         name: go vet
-        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && go vet -tags nautilus ./cmd/... ./internal/... ./test/...'
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && go vet -tags octopus ./cmd/... ./internal/... ./test/...'
         language: system
         files: ^ceph-exporter/.*\.go$
         pass_filenames: false
 
       - id: golangci-lint
         name: golangci-lint
-        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && golangci-lint run --build-tags nautilus --config ../.golangci.yml --timeout 5m ./cmd/... ./internal/... ./test/...'
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && golangci-lint run --build-tags octopus --config ../.golangci.yml --timeout 5m ./cmd/... ./internal/... ./test/...'
         language: system
         files: ^ceph-exporter/.*\.go$
         pass_filenames: false

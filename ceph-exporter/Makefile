@@ -20,9 +20,11 @@ GIT_COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Go 编译参数
 # CGO_ENABLED=1: 启用 CGO 以支持 Ceph C 库绑定
+# BUILD_TAGS: Ceph 版本构建标签（octopus = Ceph 15.x）
 GO          := go
 GOFLAGS     := -v
 CGO_ENABLED := 1
+BUILD_TAGS  := octopus
 LDFLAGS     := -ldflags "-X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X main.gitCommit=$(GIT_COMMIT)"
 
 # 目录
@@ -48,7 +50,7 @@ DOCKER_TAG   := $(VERSION)
 build:
 	@echo ">>> 编译 $(APP_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(APP_NAME) $(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) build $(GOFLAGS) -tags $(BUILD_TAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(APP_NAME) $(CMD_DIR)
 	@echo ">>> 编译完成: $(BUILD_DIR)/$(APP_NAME)"
 
 ## build-linux: 交叉编译 Linux amd64 二进制文件
@@ -56,7 +58,7 @@ build:
 build-linux:
 	@echo ">>> 交叉编译 Linux amd64..."
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 $(CMD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -tags $(BUILD_TAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 $(CMD_DIR)
 	@echo ">>> 编译完成: $(BUILD_DIR)/$(APP_NAME)-linux-amd64"
 
 # =============================================================================
@@ -67,7 +69,7 @@ build-linux:
 .PHONY: test
 test:
 	@echo ">>> 运行单元测试..."
-	CGO_ENABLED=$(CGO_ENABLED) $(GO) test -v -count=1 ./internal/...
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) test -tags $(BUILD_TAGS) -v -count=1 ./internal/...
 	@echo ">>> 测试完成"
 
 ## test-cover: 运行测试并生成覆盖率报告
@@ -75,7 +77,7 @@ test:
 test-cover:
 	@echo ">>> 运行测试（含覆盖率）..."
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) $(GO) test -v -coverprofile=$(BUILD_DIR)/coverage.out -covermode=atomic ./internal/...
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) test -tags $(BUILD_TAGS) -v -coverprofile=$(BUILD_DIR)/coverage.out -covermode=atomic ./internal/...
 	$(GO) tool cover -html=$(BUILD_DIR)/coverage.out -o $(BUILD_DIR)/coverage.html
 	@echo ">>> 覆盖率报告: $(BUILD_DIR)/coverage.html"
 
@@ -83,14 +85,14 @@ test-cover:
 .PHONY: test-short
 test-short:
 	@echo ">>> 运行快速测试..."
-	CGO_ENABLED=$(CGO_ENABLED) $(GO) test -v -short -count=1 ./internal/...
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) test -tags $(BUILD_TAGS) -v -short -count=1 ./internal/...
 
 ## test-integration: 运行集成测试
 .PHONY: test-integration
 test-integration:
 	@echo ">>> 运行集成测试..."
 	@echo ">>> 注意: 集成测试需要 Docker 和 Docker Compose"
-	cd test/integration && $(GO) test -v -timeout 30m
+	cd test/integration && $(GO) test -tags $(BUILD_TAGS) -v -timeout 30m
 
 ## test-all: 运行所有测试（单元测试 + 集成测试）
 .PHONY: test-all
@@ -105,7 +107,7 @@ test-all: test test-integration
 .PHONY: lint
 lint:
 	@echo ">>> 运行代码检查..."
-	$(GO) vet ./...
+	$(GO) vet -tags $(BUILD_TAGS) ./...
 	@echo ">>> 代码检查完成"
 
 ## fmt: 格式化代码

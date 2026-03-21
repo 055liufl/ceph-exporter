@@ -213,12 +213,12 @@ could not determine kind of name for C.rados_set_pool_full_try
 
 ### ✅ 解决方案
 
-#### 方案 1: 降级 go-ceph 版本 (已采用)
+#### 方案: 升级 go-ceph 版本以匹配 Ceph 15.x (Octopus)
 
 修改 `ceph-exporter/go.mod`:
 ```go
 require (
-    github.com/ceph/go-ceph v0.20.0  // 从 v0.27.0 降级到 v0.20.0
+    github.com/ceph/go-ceph v0.27.0  // 升级到 v0.27.0，兼容 Ceph 15.x (Octopus)
     // ... 其他依赖
 )
 ```
@@ -229,22 +229,22 @@ cd ceph-exporter
 go mod tidy
 ```
 
-#### 方案 2: 使用构建标签
+#### 构建标签更新
 
-即使降级到 v0.20.0，`ioctx_octopus.go` 文件仍然存在。需要使用构建标签来排除 Octopus 特定代码。
+使用 `-tags octopus` 构建标签以匹配 Octopus 版本:
 
 修改 `.pre-commit-config.yaml`:
 ```yaml
 - id: go-vet
   name: go vet
-  entry: bash -c 'cd ceph-exporter && go vet -tags nautilus ./...'
+  entry: bash -c 'cd ceph-exporter && go vet -tags octopus ./...'
   language: system
   files: ^ceph-exporter/.*\.go$
   pass_filenames: false
 
 - id: golangci-lint
   name: golangci-lint
-  entry: bash -c 'cd ceph-exporter && golangci-lint run --build-tags nautilus --config ../.golangci.yml --timeout 5m'
+  entry: bash -c 'cd ceph-exporter && golangci-lint run --build-tags octopus --config ../.golangci.yml --timeout 5m'
   language: system
   files: ^ceph-exporter/.*\.go$
   pass_filenames: false
@@ -274,23 +274,22 @@ golangci-lint............................................................Passed
 ## 📋 完整解决方案总结
 
 ### 环境信息
-- **操作系统**: CentOS Linux 7 (Core)
-- **内核版本**: 3.10.0-1160.118.1.el7.x86_64
-- **Python 版本**: 3.8.6
-- **Go 版本**: 1.21.6
-- **Ceph 版本**: 14.2.20 (Nautilus)
+- **操作系统**: Ubuntu 20.04 (Focal) / CentOS Linux 7 (Core)
+- **Python 版本**: 3.8+
+- **Go 版本**: 1.21+
+- **Ceph 版本**: 15.2.x (Octopus) — 匹配 Ubuntu 20.04
 
 ### 安装的工具和库
 | 工具/库 | 版本 | 用途 |
 |---------|------|------|
 | pre-commit | 3.5.0 | Git hooks 管理 |
 | pre-commit-hooks | v4.6.0 | 通用代码检查 |
-| Go | 1.21.6 | Go 编译器 |
+| Go | 1.21+ | Go 编译器 |
 | goimports | latest | Go import 管理 |
 | golangci-lint | v1.55.2 | Go 代码检查 |
-| librados-devel | 14.2.20 | Ceph RADOS 开发库 |
-| librbd-devel | 14.2.20 | Ceph RBD 开发库 |
-| go-ceph | v0.20.0 | Go Ceph 客户端库 |
+| librados-dev(el) | 15.2.x | Ceph RADOS 开发库 (Octopus) |
+| librbd-dev(el) | 15.2.x | Ceph RBD 开发库 (Octopus) |
+| go-ceph | v0.27.0 | Go Ceph 客户端库 |
 
 ### 关键配置修改
 
@@ -303,16 +302,16 @@ repos:
   - repo: local
     hooks:
       - id: go-vet
-        entry: bash -c 'cd ceph-exporter && go vet -tags nautilus ./...'
+        entry: bash -c 'cd ceph-exporter && go vet -tags octopus ./...'
 
       - id: golangci-lint
-        entry: bash -c 'cd ceph-exporter && golangci-lint run --build-tags nautilus --config ../.golangci.yml --timeout 5m'
+        entry: bash -c 'cd ceph-exporter && golangci-lint run --build-tags octopus --config ../.golangci.yml --timeout 5m'
 ```
 
 #### 2. `ceph-exporter/go.mod`
 ```go
 require (
-    github.com/ceph/go-ceph v0.20.0  // 兼容 Ceph 14.x
+    github.com/ceph/go-ceph v0.27.0  // 兼容 Ceph 15.x (Octopus)
 )
 ```
 
@@ -345,10 +344,10 @@ pre-commit install
 cd ceph-exporter
 
 # 使用构建标签编译
-go build -tags nautilus -o ceph-exporter ./cmd/ceph-exporter
+go build -tags octopus -o ceph-exporter ./cmd/ceph-exporter
 
 # 运行测试
-go test -tags nautilus ./...
+go test -tags octopus ./...
 ```
 
 ### 提交代码
@@ -366,8 +365,8 @@ git commit -m "你的提交信息"
 **检查**: 是否使用了构建标签
 ```bash
 # 正确的命令
-go vet -tags nautilus ./...
-golangci-lint run --build-tags nautilus
+go vet -tags octopus ./...
+golangci-lint run --build-tags octopus
 ```
 
 ### 问题: 找不到 librados.h
@@ -732,3 +731,503 @@ sudo docker-compose -f docker-compose-lightweight-full.yml restart ceph-demo
 - [Ceph RGW 文档](https://docs.ceph.com/en/latest/radosgw/)
 - [Ceph Dashboard 文档](https://docs.ceph.com/en/latest/mgr/dashboard/)
 - [S3 API 参考](https://docs.aws.amazon.com/AmazonS3/latest/API/)
+
+---
+
+# Ceph 开发库版本升级 — 匹配 Ubuntu 20.04
+
+## 📅 日期
+2026-03-21
+
+## 🎯 目标
+将项目的 Ceph 开发库版本从 14.x (Nautilus) 升级到 15.2.x (Octopus)，以匹配 Ubuntu 20.04 (Focal) 系统自带的 Ceph 版本。
+
+---
+
+## 🔍 背景分析
+
+### 升级前状态
+
+项目原先针对 CentOS 7 环境配置，绑定了 Ceph 14.x (Nautilus) 版本：
+
+| 组件 | 升级前版本 | 说明 |
+|------|-----------|------|
+| Ceph C 库 | 14.2.20 (Nautilus) | CentOS 7 yum 安装 |
+| go-ceph | v0.20.0 | 降级以兼容 Nautilus |
+| 构建标签 | `-tags nautilus` | 排除 Octopus+ 代码 |
+| Docker 镜像 | `ceph/daemon:latest-nautilus` | Nautilus 版本容器 |
+
+### 为什么需要升级
+
+- **Ubuntu 20.04 (Focal)** 默认仓库提供的 Ceph 版本为 **15.2.x (Octopus)**
+- 原有的 go-ceph v0.20.0 + Nautilus 配置无法在 Ubuntu 20.04 上正常编译
+- 需要 go-ceph 版本与系统 Ceph C 库版本匹配
+
+### 版本对应关系
+
+| Ubuntu 版本 | Ceph 版本 | go-ceph 兼容版本 | 构建标签 |
+|------------|-----------|-----------------|---------|
+| Ubuntu 18.04 (Bionic) | 12.x (Luminous) | v0.15.0 以下 | `luminous` |
+| CentOS 7 | 14.x (Nautilus) | v0.20.0 | `nautilus` |
+| **Ubuntu 20.04 (Focal)** | **15.2.x (Octopus)** | **v0.27.0** | **`octopus`** |
+| Ubuntu 22.04 (Jammy) | 17.x (Quincy) | v0.28.0+ | `quincy` |
+
+---
+
+## ✅ 解决方案
+
+### 概述
+
+共修改 **10 个文件**，涉及 Go 依赖、构建系统、容器配置、文档四个层面。
+
+### 修改清单
+
+| 文件 | 修改内容 | 层面 |
+|------|---------|------|
+| `ceph-exporter/go.mod` | go-ceph `v0.20.0` → `v0.27.0` | Go 依赖 |
+| `ceph-exporter/go.sum` | 自动更新依赖校验哈希 | Go 依赖 |
+| `ceph-exporter/Dockerfile` | `go build` 添加 `-tags octopus` | 构建系统 |
+| `ceph-exporter/Makefile` | 新增 `BUILD_TAGS := octopus`，所有构建/测试/检查目标添加 `-tags $(BUILD_TAGS)` | 构建系统 |
+| `.pre-commit-config.yaml` | go vet / golangci-lint 标签 `nautilus` → `octopus` | 构建系统 |
+| `deployments/docker-compose-ceph-demo.yml` | `ceph/daemon:latest-nautilus` → `latest-octopus` | 容器配置 |
+| `deployments/docker-compose-integration-test.yml` | `ceph/demo:latest-nautilus` → `latest-octopus` | 容器配置 |
+| `deployments/docker-compose-lightweight-full.yml` | `ceph/daemon:latest-nautilus` → `latest-octopus` | 容器配置 |
+| `ceph-exporter/DEVELOPMENT.md` | 更新 Ceph 开发库安装说明 | 文档 |
+| `fix_ceph.md` | 更新版本信息和构建指令 | 文档 |
+
+---
+
+### 详细修改说明
+
+#### 1. Go 依赖升级 — `ceph-exporter/go.mod`
+
+```diff
+ require (
+-    github.com/ceph/go-ceph v0.20.0
++    github.com/ceph/go-ceph v0.27.0
+ )
+```
+
+升级后执行 `go mod tidy` 自动更新 `go.sum`。
+
+go-ceph v0.27.0 的关键变化：
+- 支持 Ceph 15.x (Octopus) 的 `rados_set_pool_full_try` 等新 API
+- 通过构建标签隔离不同 Ceph 版本的代码（如 `ioctx_octopus.go`、`ioctx_pacific.go`）
+
+#### 2. Dockerfile 构建标签 — `ceph-exporter/Dockerfile`
+
+```diff
+ RUN CGO_ENABLED=1 go build \
++    -tags octopus \
+     -ldflags "..." \
+     -o /app/build/ceph-exporter \
+     ./cmd/ceph-exporter
+```
+
+**为什么必须加 `-tags octopus`？**
+
+go-ceph v0.27.0 包含适配多个 Ceph 版本的源文件：
+- `ioctx_octopus.go` — 需要 Ceph 15.x API（Octopus）
+- `ioctx_pacific.go` — 需要 Ceph 16.x API（Pacific）
+
+不加构建标签时，编译器会尝试编译**所有**文件，包括 Pacific 版本的代码，导致编译报错：
+```
+could not determine kind of name for C.rados_xxx
+```
+
+加上 `-tags octopus` 后，只编译 Ceph 15.x 及以下兼容的代码。
+
+#### 3. Makefile 构建标签 — `ceph-exporter/Makefile`
+
+新增 `BUILD_TAGS` 变量统一管理：
+
+```makefile
+BUILD_TAGS  := octopus
+```
+
+影响的目标：
+
+| Make 目标 | 修改说明 |
+|-----------|---------|
+| `build` | 添加 `-tags $(BUILD_TAGS)` |
+| `build-linux` | 添加 `-tags $(BUILD_TAGS)` |
+| `test` | 添加 `-tags $(BUILD_TAGS)` |
+| `test-cover` | 添加 `-tags $(BUILD_TAGS)` |
+| `test-short` | 添加 `-tags $(BUILD_TAGS)` |
+| `test-integration` | 添加 `-tags $(BUILD_TAGS)` |
+| `lint` | `go vet` 添加 `-tags $(BUILD_TAGS)` |
+
+#### 4. Pre-commit 构建标签 — `.pre-commit-config.yaml`
+
+```diff
+ - id: go-vet
+-  entry: bash -c '... go vet -tags nautilus ...'
++  entry: bash -c '... go vet -tags octopus ...'
+
+ - id: golangci-lint
+-  entry: bash -c '... golangci-lint run --build-tags nautilus ...'
++  entry: bash -c '... golangci-lint run --build-tags octopus ...'
+```
+
+#### 5. Docker Compose 镜像标签
+
+三个文件统一升级：
+
+```diff
+-    image: ceph/daemon:latest-nautilus
++    image: ceph/daemon:latest-octopus
+
+-    image: ceph/demo:latest-nautilus
++    image: ceph/demo:latest-octopus
+```
+
+#### 6. 开发文档 — `ceph-exporter/DEVELOPMENT.md`
+
+更新 Ceph 开发库安装说明，明确 Ubuntu 20.04 的安装方式：
+
+```bash
+# Ubuntu 20.04 (Focal) - 默认仓库已包含 Ceph 15.x (Octopus)
+sudo apt-get install -y librados-dev librbd-dev
+```
+
+---
+
+## 📊 升级前后对比
+
+| 组件 | 升级前 | 升级后 |
+|------|--------|--------|
+| **目标系统** | CentOS 7 | Ubuntu 20.04 (Focal) |
+| **Ceph 版本** | 14.x (Nautilus) | 15.2.x (Octopus) |
+| **go-ceph** | v0.20.0 | v0.27.0 |
+| **构建标签** | `-tags nautilus` | `-tags octopus` |
+| **Docker 镜像** | `latest-nautilus` | `latest-octopus` |
+| **Ceph 开发库安装** | `yum install librados-devel` | `apt install librados-dev` |
+
+---
+
+## 🚀 Ubuntu 20.04 快速开始
+
+### 1. 安装 Ceph 开发库
+
+```bash
+# Ubuntu 20.04 默认仓库已包含 Ceph 15.2.x (Octopus)，无需额外配置源
+sudo apt-get update
+sudo apt-get install -y librados-dev librbd-dev
+
+# 验证安装
+dpkg -l | grep librados-dev
+ls -la /usr/include/rados/librados.h
+```
+
+### 2. 编译项目
+
+```bash
+cd ceph-exporter
+
+# 使用 Makefile（推荐，已内置 -tags octopus）
+make build
+
+# 或手动编译
+CGO_ENABLED=1 go build -tags octopus -o build/ceph-exporter ./cmd/ceph-exporter
+```
+
+### 3. 运行测试
+
+```bash
+# 使用 Makefile
+make test
+
+# 或手动运行
+CGO_ENABLED=1 go test -tags octopus -v ./internal/...
+```
+
+### 4. Docker 构建
+
+```bash
+# Dockerfile 已内置 -tags octopus
+docker build -t ceph-exporter:dev .
+```
+
+### 5. 启动完整栈
+
+```bash
+cd deployments
+docker-compose -f docker-compose-lightweight-full.yml up -d
+```
+
+---
+
+## 💡 注意事项
+
+1. **构建标签是强制的**: 使用 go-ceph v0.27.0 时，必须指定 `-tags octopus`（或更高版本标签），否则编译器会尝试编译 Pacific (Ceph 16.x) 的代码，导致找不到 C 函数定义而报错
+2. **版本一致性**: 确保系统安装的 Ceph C 库版本（`librados-dev`）与构建标签匹配：Octopus 对应 `-tags octopus`
+3. **Docker 旧数据**: 如果之前使用 Nautilus 镜像运行过，升级到 Octopus 前建议清理旧数据目录 `deployments/data/ceph-demo/`
+4. **未来升级**: 如需适配 Ubuntu 22.04 (Ceph 17.x Quincy)，需将 go-ceph 升级到 v0.28.0+，构建标签改为 `-tags quincy`
+
+---
+
+# Docker Compose YAML 文件版本升级
+
+## 📅 日期
+2026-03-21
+
+## 🎯 目标
+将项目中所有 Docker Compose YAML 文件从过时的 `version: "2.1"` 格式升级到现代 Compose Spec 标准，消除已废弃的语法。
+
+---
+
+## 🔍 背景分析
+
+### 升级前的问题
+
+| 问题 | 说明 |
+|------|------|
+| `version: "2.1"` 已废弃 | Docker Compose V2 CLI 已完全忽略 `version` 字段，该字段仅产生警告 |
+| `mem_limit` 是旧语法 | Compose V2 格式的 `mem_limit` 不符合 Compose Spec 标准 |
+| 版本不统一 | 4 个部署文件用 `"2.1"`，1 个示例文件用 `'3.8'`，不一致 |
+| CI 使用废弃工具 | GitHub Actions 安装独立的 `docker-compose` 二进制，而非内置的 `docker compose` 插件 |
+
+### Docker Compose 版本演进
+
+| 阶段 | 版本格式 | CLI 工具 | 状态 |
+|------|---------|---------|------|
+| Compose V1 | `version: "1"` | `docker-compose`（Python） | 已淘汰 |
+| Compose V2 文件格式 | `version: "2.x"` | `docker-compose` | 已废弃 |
+| Compose V3 文件格式 | `version: "3.x"` | `docker-compose` / `docker compose` | 已废弃 |
+| **Compose Spec（现代标准）** | **无 `version` 字段** | **`docker compose`（Go 插件）** | **当前标准** |
+
+> Docker 官方自 Compose V2.21.0 起，遇到 `version` 字段会输出警告：
+> `WARN[0000] .../docker-compose.yml: 'version' is obsolete`
+
+---
+
+## ✅ 解决方案
+
+### 概述
+
+共修改 **6 个文件**，涉及三类变更：
+
+| 变更类型 | 涉及文件数 | 说明 |
+|---------|-----------|------|
+| 移除 `version` 字段 | 5 | 所有 docker-compose 文件 |
+| `mem_limit` → `deploy.resources` | 4 | 18 处服务的内存限制 |
+| `docker-compose` → `docker compose` | 1 | CI 工作流文件 |
+
+---
+
+### 修改清单
+
+#### 1. 移除 `version` 字段（5 个文件）
+
+| 文件 | 原值 | 操作 |
+|------|------|------|
+| `deployments/docker-compose.yml` | `version: "2.1"` | 删除该行 |
+| `deployments/docker-compose-lightweight-full.yml` | `version: "2.1"` | 删除该行 |
+| `deployments/docker-compose-ceph-demo.yml` | `version: "2.1"` | 删除该行 |
+| `deployments/docker-compose-integration-test.yml` | `version: "2.1"` | 删除该行 |
+| `docs/examples/docker-compose-elk.yaml` | `version: '3.8'` | 删除该行 |
+
+#### 2. `mem_limit` 迁移为 Compose Spec 标准写法（4 个文件，18 处）
+
+**旧写法（Compose V2 格式）：**
+```yaml
+services:
+  my-service:
+    image: xxx
+    mem_limit: 128m
+```
+
+**新写法（Compose Spec 标准）：**
+```yaml
+services:
+  my-service:
+    image: xxx
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+```
+
+**各文件修改详情：**
+
+| 文件 | 修改的服务 | 内存限制 |
+|------|-----------|---------|
+| `docker-compose.yml` | ceph-exporter | 128m |
+| | prometheus | 512m |
+| | grafana | 256m |
+| | alertmanager | 128m |
+| `docker-compose-lightweight-full.yml` | ceph-demo | 1024m |
+| | ceph-exporter | 128m |
+| | prometheus | 512m |
+| | grafana | 256m |
+| | alertmanager | 128m |
+| | filebeat-sidecar | 128m |
+| | elasticsearch | 512m |
+| | logstash | 768m |
+| | kibana | 1024m |
+| | jaeger | 256m |
+| `docker-compose-integration-test.yml` | ceph-demo | 1024m |
+| | ceph-exporter | 128m |
+| | prometheus | 512m |
+| | grafana | 256m |
+
+#### 3. CI 工作流升级（1 个文件）
+
+**文件**: `.github/workflows/integration-test.yml`
+
+```diff
+-      - name: Install Docker Compose
+-        run: |
+-          sudo apt-get update
+-          sudo apt-get install -y docker-compose
+-
+       - name: Verify Docker installation
+         run: |
+           docker --version
+-          docker-compose --version
++          docker compose version
+
+-          docker-compose -f ... logs > ...
++          docker compose -f ... logs > ...
+
+-          docker-compose -f ... down -v || true
++          docker compose -f ... down -v || true
+```
+
+**变更说明：**
+- 删除了安装独立 `docker-compose` 二进制的步骤（`ubuntu-latest` 已内置 `docker compose` 插件）
+- 所有 `docker-compose` 命令改为 `docker compose`（注意：连字符变空格）
+- `--version` 改为 `version`（子命令风格）
+
+---
+
+## 📊 升级前后对比
+
+| 项目 | 升级前 | 升级后 |
+|------|--------|--------|
+| **Compose 格式** | `version: "2.1"` / `"3.8"` 混用 | Compose Spec（无 version 字段） |
+| **内存限制语法** | `mem_limit: 128m` | `deploy.resources.limits.memory: 128m` |
+| **CI 工具** | 独立 `docker-compose` 二进制（Python） | 内置 `docker compose` 插件（Go） |
+| **兼容性** | 仅兼容旧版 Docker Compose | 兼容 Docker Compose V2.0+ |
+
+---
+
+## 💡 注意事项
+
+1. **向后兼容**: Compose Spec 格式完全向后兼容，`docker compose` 插件能正确解析所有旧语法
+2. **`deploy` 在非 Swarm 模式下**: 在 Docker Compose V2 CLI 中，`deploy.resources` 即使不使用 Swarm 模式也会生效（与旧版 V3 格式不同）
+3. **命令差异**: `docker-compose`（连字符）是旧的独立二进制，`docker compose`（空格）是新的内置插件，两者行为基本一致
+4. **中文翻译文件**: `.zh-CN` 后缀的翻译文件未同步更新，不影响功能运行
+
+---
+
+# Ceph Docker 镜像源替换 — 解决无法拉取问题
+
+## 📅 日期
+2026-03-21
+
+## 🎯 目标
+解决 Docker Hub 无法访问导致 `ceph/daemon` 和 `ceph/demo` 镜像无法拉取的问题，改用 quay.io 镜像源部署 Ceph 集群。
+
+---
+
+## 🔍 问题分析
+
+### 错误现象
+
+```bash
+$ sudo docker pull ceph/demo:latest-octopus
+Error response from daemon: Get "https://registry-1.docker.io/v2/": net/http: request canceled
+while waiting for connection (Client.Timeout exceeded while awaiting headers)
+
+$ sudo docker pull ceph/daemon:latest-octopus
+Error response from daemon: Get "https://registry-1.docker.io/v2/": net/http: request canceled
+while waiting for connection (Client.Timeout exceeded while awaiting headers)
+```
+
+### 原因
+
+Docker Hub（`registry-1.docker.io`）在国内网络环境下无法访问，连接超时。
+
+### 可用镜像源测试
+
+| 镜像地址 | 结果 | 说明 |
+|---------|------|------|
+| `ceph/demo:latest-octopus` | ❌ 超时 | Docker Hub 不可达 |
+| `ceph/daemon:latest-octopus` | ❌ 超时 | Docker Hub 不可达 |
+| `quay.io/ceph/demo:latest-octopus` | ❌ 不存在 | quay.io 上无 `ceph/demo` 镜像 |
+| **`quay.io/ceph/daemon:latest-octopus`** | **✅ 成功** | quay.io 可访问，镜像存在 |
+
+### 关键发现
+
+- **`ceph/demo`** 镜像在 quay.io 上**不存在**，只有 Docker Hub 上有
+- **`ceph/daemon`** 镜像在 quay.io 上**可用**，且 `ceph/daemon` 通过设置 `CEPH_DAEMON=demo` 环境变量可以完全替代 `ceph/demo` 的功能
+- 两个镜像的区别仅在于：`ceph/demo` 默认以 demo 模式启动，而 `ceph/daemon` 需要显式指定 `CEPH_DAEMON=demo`
+
+---
+
+## ✅ 解决方案
+
+### 统一使用 `quay.io/ceph/daemon:latest-octopus`
+
+将所有 docker-compose 文件中的 Ceph 镜像替换为 quay.io 源，并确保设置 `CEPH_DAEMON=demo` 环境变量。
+
+### 修改清单
+
+| 文件 | 修改前 | 修改后 |
+|------|--------|--------|
+| `docker-compose-ceph-demo.yml` | `ceph/daemon:latest-octopus` | `quay.io/ceph/daemon:latest-octopus` |
+| `docker-compose-lightweight-full.yml` | `ceph/daemon:latest-octopus` | `quay.io/ceph/daemon:latest-octopus` |
+| `docker-compose-integration-test.yml` | `ceph/demo:latest-octopus` | `quay.io/ceph/daemon:latest-octopus` + 添加 `CEPH_DAEMON=demo` |
+
+### 各文件详细修改
+
+#### 1. `docker-compose-ceph-demo.yml`
+
+仅改镜像源（已有 `CEPH_DAEMON=demo`）：
+
+```diff
+-    image: ceph/daemon:latest-octopus
++    image: quay.io/ceph/daemon:latest-octopus
+```
+
+#### 2. `docker-compose-lightweight-full.yml`
+
+仅改镜像源（已有 `CEPH_DAEMON=demo`）：
+
+```diff
+-    image: ceph/daemon:latest-octopus
++    image: quay.io/ceph/daemon:latest-octopus
+```
+
+#### 3. `docker-compose-integration-test.yml`
+
+改镜像源 + 补充环境变量（原来用的 `ceph/demo` 不需要显式设置，换成 `ceph/daemon` 后需要）：
+
+```diff
+-    image: ceph/demo:latest-octopus
++    image: quay.io/ceph/daemon:latest-octopus
+     environment:
++      - CEPH_DAEMON=demo
+       - MON_IP=172.20.0.10
+```
+
+---
+
+## 📊 升级前后对比
+
+| 项目 | 升级前 | 升级后 |
+|------|--------|--------|
+| **镜像仓库** | Docker Hub (`docker.io`) | Quay.io (`quay.io`) |
+| **Ceph Demo 镜像** | `ceph/demo:latest-octopus` | `quay.io/ceph/daemon:latest-octopus` |
+| **Ceph Daemon 镜像** | `ceph/daemon:latest-octopus` | `quay.io/ceph/daemon:latest-octopus` |
+| **拉取结果** | ❌ 超时失败 | ✅ 正常拉取 |
+
+---
+
+## 💡 注意事项
+
+1. **`CEPH_DAEMON=demo` 是关键**: 使用 `ceph/daemon` 镜像时，必须设置此环境变量才能以 demo 模式运行（自动创建 MON/OSD/MGR/RGW）
+2. **quay.io 无需认证**: quay.io 上的 `ceph/daemon` 镜像是公开的，无需登录即可拉取
+3. **已拉取的镜像**: `quay.io/ceph/daemon:latest-octopus` 已在本机拉取完成，可直接使用
+4. **Docker Hub 镜像加速**: 如果未来需要使用 Docker Hub 上的其他镜像，可配置镜像加速器（如阿里云、腾讯云等）

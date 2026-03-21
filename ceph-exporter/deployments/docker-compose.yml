@@ -18,7 +18,7 @@
 #   - ceph-exporter: http://localhost:9128/metrics
 # =============================================================================
 
-version: "2.1"
+# =============================================================================
 
 services:
 
@@ -53,7 +53,10 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
     logging:
       driver: json-file
       options:
@@ -87,7 +90,10 @@ services:
     depends_on:
       - ceph-exporter
     restart: unless-stopped
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     logging:
       driver: json-file
       options:
@@ -121,7 +127,10 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     logging:
       driver: json-file
       options:
@@ -150,7 +159,10 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
     logging:
       driver: json-file
       options:

@@ -33,14 +33,14 @@
 
 ### Ceph 开发库
 
-项目使用 CGO 与 Ceph 集群通信，需要安装 Ceph 开发库：
+项目使用 CGO 与 Ceph 集群通信，需要安装 Ceph 15.x (Octopus) 开发库：
 
 ```bash
-# CentOS 7
-sudo yum install -y librados-devel librbd-devel
-
-# Ubuntu/Debian
+# Ubuntu 20.04 (Focal) - 默认仓库已包含 Ceph 15.x (Octopus)
 sudo apt-get install -y librados-dev librbd-dev
+
+# CentOS 7 (需要配置 Ceph Octopus 仓库)
+sudo yum install -y librados-devel librbd-devel
 ```
 
 ---
