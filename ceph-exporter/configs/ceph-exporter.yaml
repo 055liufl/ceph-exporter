@@ -45,7 +45,7 @@ prometheus:
 # 日志推送方案切换说明:
 #
 # 方案 1: 直接推送到 Logstash (Direct Push)
-#   - 设置 enable_elk: true
+#   - 设置 enable_elk: false
 #   - 配置 logstash_url 和 logstash_protocol
 #   - 日志会通过 TCP/UDP 直接推送到 Logstash
 #   - 优点: 实时推送，无需额外组件
@@ -68,7 +68,7 @@ prometheus:
 # 推荐配置:
 #   - 开发环境: output: "stdout", enable_elk: false (方便查看)
 #   - 生产环境(容器): output: "stdout", enable_elk: false + Filebeat sidecar (方案2)
-#   - 生产环境(直连): output: "stdout", enable_elk: true (方案1)
+#   - 生产环境(直连): output: "stdout", enable_elk: false (方案1)
 # -----------------------------------------------------------------------------
 logger:
   level: "debug"                 # Log level: trace, debug, info, warn, error, fatal, panic
