@@ -64,10 +64,10 @@ Exiting: error loading config file: config file ("filebeat.yml") must be owned b
 
 ```bash
 # 修改文件所有者为 root
-sudo chown root:root /home/lfl/ceph-exporter/ceph-exporter/deployments/filebeat/filebeat.yml
+sudo chown root:root filebeat/filebeat.yml
 
 # 设置权限为 644
-sudo chmod 644 /home/lfl/ceph-exporter/ceph-exporter/deployments/filebeat/filebeat.yml
+sudo chmod 644 filebeat/filebeat.yml
 
 # 重启 Filebeat
 sudo docker restart filebeat-sidecar
@@ -133,8 +133,8 @@ volumes:
 重新创建容器：
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
-sudo docker-compose -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
+cd ceph-exporter/deployments
+sudo docker compose -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
 ```
 
 ---
@@ -191,7 +191,7 @@ Kibana (Index Pattern: ceph-exporter-*)
 
 | 文件 | 路径 |
 |------|------|
-| Docker Compose | `/home/lfl/ceph-exporter/ceph-exporter/deployments/docker-compose-lightweight-full.yml` |
-| Filebeat 配置 | `/home/lfl/ceph-exporter/ceph-exporter/deployments/filebeat/filebeat.yml` |
+| Docker Compose | `docker-compose-lightweight-full.yml` |
+| Filebeat 配置 | `filebeat/filebeat.yml` |
 | Logstash 管道配置 | 容器内 `/usr/share/logstash/pipeline/logstash.conf` |
 | Docker 数据目录 | `/home/docker/` （非默认路径） |

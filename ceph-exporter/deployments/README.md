@@ -45,7 +45,7 @@ deployments/
 
 ## 🚀 快速开始
 
-### CentOS 7 + Docker 环境
+### Ubuntu 20.04 + Docker 环境
 
 ```bash
 # 轻量级完整栈（推荐）
@@ -62,13 +62,13 @@ LOGGING_MODE=direct ./scripts/deploy.sh full        # 直接推送到 Logstash (
 ./scripts/deploy.sh init
 
 # 2. 启动服务
-docker-compose -f docker-compose-lightweight-full.yml up -d
+docker compose -f docker-compose-lightweight-full.yml up -d
 
 # 3. 验证部署
 ./scripts/deploy.sh verify
 
 # 或标准监控栈
-docker-compose up -d
+docker compose up -d
 ```
 
 **数据存储**: 所有服务数据存储在 `./data/` 目录，详见 [DATA_STORAGE.md](DATA_STORAGE.md)。
@@ -102,7 +102,7 @@ docker-compose up -d
 
 ### deploy.sh - 主部署脚本
 
-通用部署脚本，适用于 CentOS 7 + Docker 环境。
+通用部署脚本，适用于 Ubuntu 20.04 + Docker 环境。
 
 ```bash
 # 环境检查
@@ -230,8 +230,8 @@ sudo ./scripts/fix-deployment.sh
 
 如需完整的部署指南，请查看：
 
-- **[统一部署指南](../DEPLOYMENT_GUIDE.md)** - 完整的部署步骤和说明 ⭐
-- **[镜像配置指南](../DOCKER_MIRROR_CONFIGURATION.md)** - Docker 镜像加速配置
+- **[完整操作指南](../../Ceph-Exporter项目完整操作指南.md)** - 部署、配置、使用一站式指南 ⭐
+- **[镜像配置指南](../../DOCKER_MIRROR_CONFIGURATION.md)** - Docker 镜像加速配置
 - **[数据存储说明](DATA_STORAGE.md)** - 数据目录结构和管理 ⭐
 - **[时区配置说明](TIMEZONE_CONFIGURATION.md)** - 容器时区配置详解 ⭐
 - **[故障排查指南](TROUBLESHOOTING.md)** - 常见问题和解决方案 ⭐
@@ -242,19 +242,19 @@ sudo ./scripts/fix-deployment.sh
 
 ```bash
 # 查看容器状态
-docker-compose ps
+docker compose ps
 
 # 查看日志
-docker-compose logs -f
+docker compose logs -f
 
 # 停止服务
-docker-compose down
+docker compose down
 
 # 停止并删除数据
 ./scripts/deploy.sh clean
 
 # 重启服务
-docker-compose restart
+docker compose restart
 
 # 备份数据
 tar -czf backup-$(date +%Y%m%d).tar.gz data/
@@ -267,8 +267,8 @@ du -sh data/*
 
 ## 💡 提示
 
-- **不确定用哪个配置？** 查看 [统一部署指南](../DEPLOYMENT_GUIDE.md) 的"部署方式选择"章节
-- **CentOS 7 用户**: 使用 localhost 访问所有服务
+- **不确定用哪个配置？** 查看 [完整操作指南](../../Ceph-Exporter项目完整操作指南.md) 的"部署方式选择"章节
+- **Ubuntu 20.04 用户**: 使用 localhost 访问所有服务
 - **国内用户**: 建议配置 Docker 镜像加速器
 
 ---
@@ -288,7 +288,7 @@ sudo ./scripts/deploy.sh init
 
 # 方法 2: 手动修复权限
 sudo chown -R 65534:65534 data/prometheus
-docker-compose restart prometheus
+docker compose restart prometheus
 ```
 
 ### 2. Ceph-Exporter 连接失败
@@ -309,7 +309,7 @@ ln -s ../configs configs
 sudo chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
 
 # 重启 ceph-exporter
-docker-compose restart ceph-exporter
+docker compose restart ceph-exporter
 ```
 
 ### 3. Ceph-Demo 验证失败
@@ -363,7 +363,7 @@ sudo ./scripts/deploy.sh verify
   - 修复 ceph-demo 验证逻辑（RGW 返回 404 是正常的）
   - 更新部署脚本，自动处理所有权限和配置问题
 - **2026-03-07**: 所有配置文件和文档已同步到最新状态
-- **2026-03-07**: 更新为 CentOS 7 + Docker 环境
+- **2026-03-07**: 更新为 Ubuntu 20.04 + Docker 环境
 - **2026-03-02**: 新增轻量级完整部署配置
 
 ---

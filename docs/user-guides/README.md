@@ -6,9 +6,7 @@
 
 ### 中文界面配置
 
-- **中文界面配置说明.md** - Grafana 和 Kibana 中文界面配置步骤
-- **中文界面完整性说明.md** - 中文界面功能完整性说明
-- **中文可观测性实现指南.md** - 完整的中文可观测性配置指南
+- **中文可观测性实现指南.md** - 完整的中文可观测性配置指南（含界面配置步骤）
 
 ## 🎯 用途
 
@@ -23,7 +21,5 @@
 
 ## 🔗 相关文档
 
-- [部署指南](../DEPLOYMENT_GUIDE.md)
-- [快速开始](../QUICK_START.md)
-- [Prometheus 使用指南](../Prometheus使用指南.md)
-- [Alertmanager 使用指南](../Alertmanager使用指南.md)
+- [完整操作指南](../../Ceph-Exporter项目完整操作指南.md)
+- [Alertmanager 使用指南](../../Alertmanager使用指南.md)

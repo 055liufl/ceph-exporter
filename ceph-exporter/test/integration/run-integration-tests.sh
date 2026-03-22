@@ -57,12 +57,12 @@ check_prerequisites() {
     fi
 
     # 检查 Docker Compose
-    if command -v docker-compose &> /dev/null; then
-        COMPOSE_CMD="docker-compose"
-    elif docker compose version &> /dev/null; then
+    if docker compose version &> /dev/null; then
         COMPOSE_CMD="docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
     else
-        log_error "Docker Compose 未安装"
+        echo "Error: Docker Compose not found"
         exit 1
     fi
 
@@ -84,11 +84,11 @@ setup_environment() {
 
     # 清理旧环境
     log_info "清理旧的测试环境..."
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" down -v 2>/dev/null || true
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" down -v 2>/dev/null || true
 
     # 启动服务
     log_info "启动 Docker Compose 服务..."
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" up -d --build
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" up -d --build
 
     # 等待服务启动
     log_info "等待服务启动（45秒）..."
@@ -96,7 +96,7 @@ setup_environment() {
 
     # 检查服务状态
     log_info "检查服务状态..."
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" ps
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" ps
 
     log_info "测试环境设置完成"
 }
@@ -121,7 +121,7 @@ run_tests() {
 cleanup_environment() {
     log_step "清理测试环境..."
 
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" down
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" down
 
     log_info "测试环境清理完成"
 }
@@ -136,7 +136,7 @@ collect_logs() {
     local timestamp=$(date +%Y%m%d_%H%M%S)
     local log_file="${log_dir}/integration-test-${timestamp}.log"
 
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" logs > "${log_file}"
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" logs > "${log_file}"
 
     log_info "日志已保存到: ${log_file}"
 }

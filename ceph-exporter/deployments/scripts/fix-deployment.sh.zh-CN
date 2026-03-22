@@ -1,40 +1,83 @@
 #!/bin/bash
 # =============================================================================
-# 快速修复部署问题脚本
+# 快速修复部署问题脚本 - 详细中文注释版本
 # =============================================================================
-# 用途: 修复常见的部署问题（权限、配置路径等）
-# 使用: sudo ./scripts/fix-deployment.sh
+# 功能说明：
+#   自动修复 ceph-exporter 部署中的常见问题
+#
+# 主要功能：
+#   1. 修复 Prometheus 数据目录权限（65534:65534）
+#   2. 修复 Grafana 数据目录权限（472:472）
+#   3. 修复 Elasticsearch 数据目录权限（1000:1000）
+#   4. 创建 configs 目录软链接
+#   5. 修复 Ceph keyring 文件权限
+#   6. 检查并设置 vm.max_map_count（Elasticsearch 需要）
+#   7. 重启失败的服务
+#
+# 使用方式：
+#   sudo ./scripts/fix-deployment.sh
+#
+# 注意事项：
+#   - 需要 root 权限（sudo）
+#   - 脚本会等待 30 秒让服务启动
+#   - 修复完成后会显示服务状态
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# Bash 严格模式设置
+# -----------------------------------------------------------------------------
+# set -e: 命令失败时退出
+# set -u: 引用未定义变量时报错
+# set -o pipefail: 管道中任何命令失败都视为失败
 set -euo pipefail
 
+# -----------------------------------------------------------------------------
+# 目录路径定义
+# -----------------------------------------------------------------------------
+# SCRIPT_DIR: 当前脚本所在目录的绝对路径
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# DEPLOY_DIR: 部署目录（scripts 目录的父目录）
 DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# -----------------------------------------------------------------------------
+# 终端颜色定义
+# -----------------------------------------------------------------------------
+RED='\033[0;31m'      # 红色 - 错误信息
+GREEN='\033[0;32m'    # 绿色 - 成功信息
+YELLOW='\033[1;33m'   # 黄色 - 警告信息
+BLUE='\033[0;34m'     # 蓝色 - 步骤提示
+NC='\033[0m'          # 无颜色 - 重置
 
+# -----------------------------------------------------------------------------
+# 日志输出函数
+# -----------------------------------------------------------------------------
+
+# 输出信息日志（绿色）
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
 
+# 输出警告日志（黄色）
 log_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# 输出错误日志（红色）
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# 输出步骤提示（蓝色）
 log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
-# 检查是否为 root 或有 sudo 权限
+# -----------------------------------------------------------------------------
+# 权限检查函数
+# -----------------------------------------------------------------------------
+# 检查是否以 root 身份运行
+# 说明：
+#   - $EUID: 当前有效用户 ID，0 表示 root
 check_sudo() {
     if [ "$EUID" -ne 0 ]; then
         log_error "此脚本需要 root 权限"
@@ -43,13 +86,20 @@ check_sudo() {
     fi
 }
 
+# -----------------------------------------------------------------------------
 # 修复 Prometheus 权限
+# -----------------------------------------------------------------------------
+# 说明：
+#   - Prometheus 容器以 nobody 用户运行（UID 65534）
+#   - 数据目录必须属于 65534:65534
 fix_prometheus_permissions() {
     log_step "修复 Prometheus 数据目录权限..."
 
     local prom_dir="$DEPLOY_DIR/data/prometheus"
 
     if [ -d "$prom_dir" ]; then
+        # chown -R: 递归修改所有者
+        # 65534:65534: nobody 用户和组
         chown -R 65534:65534 "$prom_dir"
         log_info "✓ Prometheus 权限已修复 (65534:65534)"
     else
@@ -57,13 +107,19 @@ fix_prometheus_permissions() {
     fi
 }
 
+# -----------------------------------------------------------------------------
 # 修复 Grafana 权限
+# -----------------------------------------------------------------------------
+# 说明：
+#   - Grafana 容器以 grafana 用户运行（UID 472）
+#   - 数据目录必须属于 472:472
 fix_grafana_permissions() {
     log_step "修复 Grafana 数据目录权限..."
 
     local grafana_dir="$DEPLOY_DIR/data/grafana"
 
     if [ -d "$grafana_dir" ]; then
+        # 472:472: Grafana 容器内的用户 ID
         chown -R 472:472 "$grafana_dir"
         log_info "✓ Grafana 权限已修复 (472:472)"
     else
@@ -71,13 +127,19 @@ fix_grafana_permissions() {
     fi
 }
 
+# -----------------------------------------------------------------------------
 # 修复 Elasticsearch 权限
+# -----------------------------------------------------------------------------
+# 说明：
+#   - Elasticsearch 容器以 elasticsearch 用户运行（UID 1000）
+#   - 数据目录必须属于 1000:1000
 fix_elasticsearch_permissions() {
     log_step "修复 Elasticsearch 数据目录权限..."
 
     local es_dir="$DEPLOY_DIR/data/elasticsearch"
 
     if [ -d "$es_dir" ]; then
+        # 1000:1000: Elasticsearch 容器内的用户 ID
         chown -R 1000:1000 "$es_dir"
         log_info "✓ Elasticsearch 权限已修复 (1000:1000)"
     else
@@ -85,18 +147,25 @@ fix_elasticsearch_permissions() {
     fi
 }
 
-# 创建 configs 软链接
+# -----------------------------------------------------------------------------
+# 修复 configs 软链接
+# -----------------------------------------------------------------------------
+# 说明：
+#   - 部署目录中的 configs 应该是指向项目根目录 configs 的软链接
+#   - 确保容器可以正确访问配置文件
 fix_configs_symlink() {
     log_step "检查 configs 目录软链接..."
 
     cd "$DEPLOY_DIR"
 
+    # -L: 检查是否为软链接
     if [ -L "configs" ]; then
         log_info "✓ configs 软链接已存在"
     elif [ -d "configs" ]; then
         log_warn "configs 是一个目录，不是软链接"
         log_info "如果遇到配置文件问题，请手动检查"
     else
+        # 如果上级目录存在 configs，创建软链接
         if [ -d "../configs" ]; then
             ln -s ../configs configs
             log_info "✓ 已创建 configs -> ../configs 软链接"
@@ -107,7 +176,12 @@ fix_configs_symlink() {
     fi
 }
 
+# -----------------------------------------------------------------------------
 # 修复 Ceph keyring 权限
+# -----------------------------------------------------------------------------
+# 说明：
+#   - Ceph keyring 文件需要可读权限
+#   - 容器需要读取 keyring 进行认证
 fix_ceph_keyring() {
     log_step "修复 Ceph keyring 文件权限..."
 
@@ -115,6 +189,7 @@ fix_ceph_keyring() {
 
     if [ -f "$keyring" ]; then
         # 修改为 644 权限，允许容器读取
+        # 644 = 所有者读写，组和其他用户只读
         chmod 644 "$keyring"
         log_info "✓ Keyring 权限已修复 (644)"
 
@@ -130,19 +205,28 @@ fix_ceph_keyring() {
     fi
 }
 
-# 检查并修复 vm.max_map_count（Elasticsearch 需要）
+# -----------------------------------------------------------------------------
+# 修复 vm.max_map_count
+# -----------------------------------------------------------------------------
+# 说明：
+#   - Elasticsearch 需要 vm.max_map_count >= 262144
+#   - 默认值通常为 65530，不满足要求
+#   - 同时写入 /etc/sysctl.conf 使配置永久生效
 fix_vm_max_map_count() {
     log_step "检查 vm.max_map_count 设置..."
 
+    # sysctl -n: 只输出值，不显示变量名
     local current=$(sysctl -n vm.max_map_count 2>/dev/null || echo 0)
     local required=262144
 
+    # -lt: 小于（less than）
     if [ "$current" -lt "$required" ]; then
         log_warn "vm.max_map_count 当前值: $current (需要: $required)"
+        # sysctl -w: 临时设置内核参数
         sysctl -w vm.max_map_count=$required
         log_info "✓ vm.max_map_count 已设置为 $required"
 
-        # 永久生效
+        # 永久生效：写入 /etc/sysctl.conf
         if ! grep -q "vm.max_map_count" /etc/sysctl.conf; then
             echo "vm.max_map_count=$required" >> /etc/sysctl.conf
             log_info "✓ 已添加到 /etc/sysctl.conf（永久生效）"
@@ -152,13 +236,19 @@ fix_vm_max_map_count() {
     fi
 }
 
+# -----------------------------------------------------------------------------
 # 重启失败的服务
+# -----------------------------------------------------------------------------
+# 说明：
+#   - 自动检测使用的 Docker Compose 文件
+#   - 查找处于 Restarting 状态的容器并重启
 restart_failed_services() {
     log_step "检查并重启失败的服务..."
 
     cd "$DEPLOY_DIR"
 
     # 检测使用的 compose 文件
+    # 根据运行中的容器名称判断使用了哪个 compose 配置
     local compose_file="docker-compose.yml"
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "kibana"; then
         compose_file="docker-compose-lightweight-full.yml"
@@ -168,13 +258,13 @@ restart_failed_services() {
 
     log_info "使用配置文件: $compose_file"
 
-    # 检查 Prometheus
+    # 检查 Prometheus 是否处于重启循环
     if docker ps -a --format '{{.Names}}\t{{.Status}}' 2>/dev/null | grep "prometheus" | grep -q "Restarting"; then
         log_info "重启 Prometheus..."
         docker compose -f "$compose_file" restart prometheus
     fi
 
-    # 检查 ceph-exporter
+    # 检查 ceph-exporter 是否处于重启循环
     if docker ps -a --format '{{.Names}}\t{{.Status}}' 2>/dev/null | grep "ceph-exporter" | grep -q "Restarting"; then
         log_info "重启 ceph-exporter..."
         docker compose -f "$compose_file" restart ceph-exporter
@@ -183,14 +273,18 @@ restart_failed_services() {
     log_info "✓ 服务重启完成"
 }
 
+# -----------------------------------------------------------------------------
 # 显示服务状态
+# -----------------------------------------------------------------------------
+# 说明：
+#   - 根据检测到的 compose 文件显示所有服务状态
 show_status() {
     log_step "当前服务状态..."
     echo ""
 
     cd "$DEPLOY_DIR"
 
-    # 检测使用的 compose 文件
+    # 根据运行中的容器判断使用哪个 compose 文件来显示状态
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "kibana"; then
         docker compose -f docker-compose-lightweight-full.yml ps
     elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "ceph-demo"; then
@@ -200,16 +294,22 @@ show_status() {
     fi
 }
 
+# -----------------------------------------------------------------------------
 # 主函数
+# -----------------------------------------------------------------------------
+# 说明：
+#   - 按顺序执行所有修复步骤
+#   - 最后显示服务状态和后续操作建议
 main() {
     echo "========================================"
     echo "  ceph-exporter 部署问题修复脚本"
     echo "========================================"
     echo ""
 
+    # 检查 root 权限
     check_sudo
 
-    # 执行所有修复步骤
+    # 依次执行所有修复步骤
     fix_prometheus_permissions
     echo ""
 
@@ -231,13 +331,16 @@ main() {
     restart_failed_services
     echo ""
 
+    # 等待服务完成启动
     log_info "等待 30 秒让服务启动..."
     sleep 30
     echo ""
 
+    # 显示当前服务状态
     show_status
     echo ""
 
+    # 输出完成信息和后续操作建议
     log_step "修复完成！"
     echo ""
     log_info "如果服务仍然失败，请查看日志:"
@@ -252,4 +355,6 @@ main() {
     echo "  cat TROUBLESHOOTING.md"
 }
 
+# 执行主函数，传递所有命令行参数
+# "$@": 所有命令行参数
 main "$@"

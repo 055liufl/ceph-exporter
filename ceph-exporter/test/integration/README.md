@@ -20,7 +20,7 @@
 - 测试容器间网络通信
 - 验证所有服务的健康检查端点
 - 验证服务间的 DNS 解析
-- 支持 CentOS 7 + Docker 环境
+- 支持 Ubuntu 20.04 + Docker 环境
 
 ### 3. 服务功能测试 (`services_test.go`)
 
@@ -51,9 +51,9 @@
    - CPU: 至少 2 核
    - 磁盘: 至少 5GB 可用空间
 
-### CentOS 7 环境说明
+### Ubuntu 20.04 环境说明
 
-本项目运行在 CentOS 7 + Docker 环境中：
+本项目运行在 Ubuntu 20.04 + Docker 环境中：
 
 1. **访问服务**: 使用 localhost 访问所有服务
    - Prometheus: http://localhost:9090
@@ -63,10 +63,10 @@
 
 2. **防火墙配置**: 如需远程访问，请开放相应端口
    ```bash
-   sudo firewall-cmd --permanent --add-port=9128/tcp
-   sudo firewall-cmd --permanent --add-port=9090/tcp
-   sudo firewall-cmd --permanent --add-port=3000/tcp
-   sudo firewall-cmd --reload
+   sudo ufw allow 9128/tcp
+   sudo ufw allow 9090/tcp
+   sudo ufw allow 3000/tcp
+   sudo ufw reload
    ```
 
 ## 运行测试
@@ -127,10 +127,10 @@ go test -short
 
 ```bash
 # 查看容器日志
-docker-compose -f ../../deployments/docker-compose.yml logs
+docker compose -f ../../deployments/docker-compose-integration-test.yml logs
 
 # 查看特定服务日志
-docker-compose -f ../../deployments/docker-compose.yml logs ceph-exporter
+docker compose -f ../../deployments/docker-compose-integration-test.yml logs ceph-exporter
 ```
 
 ### 网络连接失败
@@ -177,7 +177,7 @@ cd ../../deployments
 
 ## 测试覆盖的验收标准
 
-根据 `docs/ceph-exporter-plan.md` Phase 4 的验收标准：
+验收标准：
 
 - ✅ 所有容器能正常启动
 - ✅ 容器间网络通信正常

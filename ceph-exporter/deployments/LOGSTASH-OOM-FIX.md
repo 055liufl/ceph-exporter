@@ -29,7 +29,10 @@ mem_limit: 256m
 ```yaml
 environment:
   - "LS_JAVA_OPTS=-Xms512m -Xmx512m"
-mem_limit: 768m
+deploy:
+  resources:
+    limits:
+      memory: 768m
 ```
 
 ### 2. 添加 Logstash 配置文件挂载
@@ -59,28 +62,19 @@ volumes:
 ### 方法1: 重启 Logstash 服务（推荐）
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
-sudo ./scripts/fix-logstash-oom.sh
+cd ceph-exporter/deployments
+
+# 停止并删除 Logstash 容器，然后重新创建
+sudo docker compose -f docker-compose-lightweight-full.yml stop logstash
+sudo docker compose -f docker-compose-lightweight-full.yml rm -f logstash
+sudo docker compose -f docker-compose-lightweight-full.yml up -d logstash
 ```
 
-### 方法2: 手动重新创建服务
+### 方法2: 使用部署脚本重新部署
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
-
-# 停止并删除 Logstash 容器
-sudo docker-compose -f docker-compose-lightweight-full.yml stop logstash
-sudo docker-compose -f docker-compose-lightweight-full.yml rm -f logstash
-
-# 重新创建并启动
-sudo docker-compose -f docker-compose-lightweight-full.yml up -d logstash
-```
-
-### 方法3: 使用部署脚本
-
-```bash
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
-sudo ./scripts/deploy.sh -f docker-compose-lightweight-full.yml restart logstash
+cd ceph-exporter/deployments
+sudo ./scripts/deploy.sh full
 ```
 
 ## 验证修复
@@ -88,10 +82,10 @@ sudo ./scripts/deploy.sh -f docker-compose-lightweight-full.yml restart logstash
 ### 1. 查看 Logstash 日志
 
 ```bash
-sudo docker-compose -f docker-compose-lightweight-full.yml logs -f logstash
+sudo docker compose -f docker-compose-lightweight-full.yml logs -f logstash
 
 # 或使用部署脚本
-sudo ./scripts/deploy.sh -f docker-compose-lightweight-full.yml logs logstash
+sudo docker compose -f docker-compose-lightweight-full.yml logs -f logstash
 ```
 
 应该看到类似以下的成功启动日志：
@@ -113,8 +107,8 @@ curl http://localhost:9600/_node/stats/pipelines
 ### 3. 测试日志接收
 
 ```bash
-# 测试 TCP 输入（方案1）
-echo '{"message":"test","level":"info"}' | nc localhost 5000
+# 测试 TCP 输入（方案1，主机端口 5001 映射到容器端口 5000）
+echo '{"message":"test","level":"info"}' | nc localhost 5001
 
 # 查看 Elasticsearch 中的日志
 curl http://localhost:9200/ceph-exporter-*/_search?pretty
@@ -139,7 +133,10 @@ curl http://localhost:9200/ceph-exporter-*/_search?pretty
 ```yaml
 environment:
   - "LS_JAVA_OPTS=-Xms1g -Xmx1g"
-mem_limit: 1536m
+deploy:
+  resources:
+    limits:
+      memory: 1536m
 ```
 
 ### 2. 调整 Worker 数量
@@ -181,7 +178,10 @@ output {
 ```yaml
 environment:
   - "LS_JAVA_OPTS=-Xms1g -Xmx1g"
-mem_limit: 1536m
+deploy:
+  resources:
+    limits:
+      memory: 1536m
 ```
 
 ### 问题2: Logstash 启动慢
@@ -199,8 +199,8 @@ sudo docker exec logstash /usr/share/logstash/bin/logstash --config.test_and_exi
 
 ## 相关文档
 
-- [ELK 日志集成指南](../../docs/ELK-LOGGING-GUIDE.md)
-- [Logstash 配置示例](../../configs/logstash.conf)
+- [ELK 日志集成指南](../docs/ELK-LOGGING-GUIDE.md)
+- [Logstash 配置示例](../configs/logstash.conf)
 - [日志切换脚本](./scripts/README-switch-logging.md)
 
 ## 总结

@@ -106,7 +106,7 @@ logger:
   format: "json"
   output: "stdout"              # 同时输出到 stdout（可选）
   enable_elk: true              # 启用 ELK 集成
-  logstash_url: "logstash:5044" # Logstash 地址
+  logstash_url: "logstash:5000" # Logstash 地址
   logstash_protocol: "tcp"      # tcp（可靠）或 udp（快速）
   service_name: "ceph-exporter"
 ```
@@ -115,7 +115,7 @@ logger:
 
 ```bash
 # 使用 Docker Compose 启动（包含 ELK Stack）
-docker-compose -f configs/docker-compose-elk.yaml up -d ceph-exporter-direct logstash elasticsearch kibana
+docker compose -f docker-compose-lightweight-full.yml up -d ceph-exporter logstash elasticsearch kibana
 
 # 或直接运行
 ./ceph-exporter -config configs/ceph-exporter.yaml
@@ -151,13 +151,13 @@ logger:
 
 #### 2. 配置 Filebeat
 
-使用提供的 `configs/filebeat.yml` 配置文件，或根据需要修改。
+使用提供的 `deployments/filebeat/filebeat.yml` 配置文件，或根据需要修改。
 
 #### 3. 启动服务
 
 ```bash
 # 使用 Docker Compose 启动（包含 Filebeat sidecar）
-docker-compose -f configs/docker-compose-elk.yaml up -d ceph-exporter-sidecar filebeat-sidecar logstash elasticsearch kibana
+docker compose -f docker-compose-lightweight-full.yml up -d ceph-exporter filebeat-sidecar logstash elasticsearch kibana
 ```
 
 #### 4. Kubernetes 部署示例
@@ -183,7 +183,7 @@ spec:
 
   # Filebeat sidecar
   - name: filebeat
-    image: elastic/filebeat:8.11.0
+    image: elastic/filebeat:7.17.0
     volumeMounts:
     - name: filebeat-config
       mountPath: /usr/share/filebeat/filebeat.yml
@@ -226,7 +226,7 @@ spec:
 ./deployments/scripts/switch-logging-mode.sh container
 
 # 切换后重启 ceph-exporter 以应用配置
-docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
+docker compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 ```
 
 ### 手动切换：从方案 2 切换到方案 1
@@ -236,10 +236,10 @@ docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 sed -i 's/enable_elk: false/enable_elk: true/' configs/ceph-exporter.yaml
 
 # 2. 重启服务
-docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
+docker compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 
 # 3. 停止 Filebeat（可选）
-docker-compose -f docker-compose-lightweight-full.yml stop filebeat-sidecar
+docker compose -f docker-compose-lightweight-full.yml stop filebeat-sidecar
 ```
 
 ### 手动切换：从方案 1 切换到方案 2
@@ -249,10 +249,10 @@ docker-compose -f docker-compose-lightweight-full.yml stop filebeat-sidecar
 sed -i 's/enable_elk: true/enable_elk: false/' configs/ceph-exporter.yaml
 
 # 2. 启动 Filebeat
-docker-compose -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
+docker compose -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
 
 # 3. 重启服务
-docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
+docker compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 ```
 
 ---
@@ -287,13 +287,13 @@ grep -A 5 "enable_elk" configs/ceph-exporter.yaml
 
 2. 检查网络连接:
 ```bash
-telnet logstash 5044
+telnet logstash 5000
 ```
 
 3. 查看 ceph-exporter 日志:
 ```bash
 docker logs ceph-exporter | grep -i elk
-# 应该看到: "ELK 集成已启用，日志将推送到 tcp://logstash:5044"
+# 应该看到: "ELK 集成已启用，日志将推送到 tcp://logstash:5000"
 ```
 
 4. 查看 Logstash 日志:
@@ -404,7 +404,7 @@ curl http://localhost:5066/stats
 
 4. **设置合理的日志保留策略**
    ```yaml
-   max_age: 7  # 保留 7 天
+   max_age: 28  # 保留 28 天
    ```
 
 5. **使用 JSON 格式**（便于 ELK 解析）

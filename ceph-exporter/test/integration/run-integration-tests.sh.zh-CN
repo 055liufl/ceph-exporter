@@ -99,13 +99,13 @@ check_prerequisites() {
     fi
 
     # 检查 Docker Compose
-    # 支持两种版本：docker-compose（v1）和 docker compose（v2）
-    if command -v docker-compose &> /dev/null; then
-        COMPOSE_CMD="docker-compose"
-    elif docker compose version &> /dev/null; then
+    # 支持两种版本：docker compose（v2 插件，优先）和 docker-compose（v1）
+    if docker compose version &> /dev/null; then
         COMPOSE_CMD="docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
     else
-        log_error "Docker Compose 未安装"
+        echo "Error: Docker Compose not found"
         exit 1
     fi
 
@@ -141,13 +141,13 @@ setup_environment() {
     # -v: 同时删除数据卷
     # 2>/dev/null: 忽略错误输出（如果没有旧环境）
     # || true: 即使失败也继续执行
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" down -v 2>/dev/null || true
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" down -v 2>/dev/null || true
 
     # 启动服务
     log_info "启动 Docker Compose 服务..."
     # -d: 后台运行（detached mode）
     # --build: 重新构建镜像（如果有变化）
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" up -d --build
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" up -d --build
 
     # 等待服务启动
     log_info "等待服务启动（45秒）..."
@@ -157,7 +157,7 @@ setup_environment() {
     # 检查服务状态
     log_info "检查服务状态..."
     # ps: 显示容器状态
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" ps
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" ps
 
     log_info "测试环境设置完成"
 }
@@ -201,7 +201,7 @@ cleanup_environment() {
     log_step "清理测试环境..."
 
     # down: 停止并删除容器、网络
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" down
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" down
 
     log_info "测试环境清理完成"
 }
@@ -228,7 +228,7 @@ collect_logs() {
 
     # 收集所有容器的日志
     # >: 重定向输出到文件
-    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose.yml" logs > "${log_file}"
+    ${COMPOSE_CMD} -f "${DEPLOY_DIR}/docker-compose-integration-test.yml" logs > "${log_file}"
 
     log_info "日志已保存到: ${log_file}"
 }

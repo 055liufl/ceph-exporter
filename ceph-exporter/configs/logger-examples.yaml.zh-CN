@@ -1,0 +1,153 @@
+# =============================================================================
+# 日志配置示例文件
+# =============================================================================
+#
+# 【文件用途】
+#   提供 ceph-exporter 在不同部署场景下的日志配置示例。
+#   用户可以根据自己的部署环境，选择合适的配置方案，
+#   将对应配置复制到 ceph-exporter.yaml 的 logger 部分即可使用。
+#
+# 【使用方法】
+#   1. 根据部署环境选择合适的场景配置
+#   2. 将对应的 logger_xxx 配置复制到 ceph-exporter.yaml 中
+#   3. 将键名改为 logger（去掉后缀）
+#
+# 【场景概览】
+#   场景 1 - logger_dev:                 开发调试（控制台文本输出）
+#   场景 2 - logger_prod_container:      容器部署（JSON 标准输出 + Filebeat 采集）
+#   场景 3 - logger_prod_logstash_tcp:   直连 ELK（TCP 协议，可靠传输）
+#   场景 4 - logger_prod_logstash_udp:   直连 ELK（UDP 协议，高性能）
+#   场景 5 - logger_prod_file:           文件日志（配合 Filebeat 采集）
+#   场景 6 - logger_prod_hybrid:         混合模式（文件 + Logstash 双重输出）
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 场景 1: 开发环境 - 输出到控制台，便于调试
+# -----------------------------------------------------------------------------
+# 适用场景：本地开发和调试，无需日志收集
+# 特点：文本格式可读性强，debug 级别输出详细信息
+logger_dev:
+  level: "debug"                # 日志级别：debug（最详细，输出所有级别日志）
+  format: "text"                # 输出格式：text（人类可读的文本格式，非结构化）
+  output: "stdout"              # 输出目标：stdout（标准输出，即终端/控制台）
+  enable_elk: false             # 是否推送到 ELK：否（开发环境不需要）
+
+# -----------------------------------------------------------------------------
+# 场景 2: 生产环境 - 容器日志收集（推荐）
+# 使用 Filebeat/Fluentd 等采集容器标准输出
+# -----------------------------------------------------------------------------
+# 适用场景：Docker/Kubernetes 容器化部署
+# 特点：JSON 格式便于日志收集器解析，由 Filebeat sidecar 负责推送到 ELK
+# 优势：应用与日志收集解耦，应用无需关心 ELK 连接
+logger_prod_container:
+  level: "info"                 # 日志级别：info（生产环境标准级别）
+  format: "json"                # 输出格式：json（结构化格式，便于机器解析）
+  output: "stdout"              # 输出目标：stdout（容器标准输出）
+  enable_elk: false             # 不直接推送到 ELK（由 Filebeat sidecar 容器负责采集和推送）
+  service_name: "ceph-exporter" # 服务名称标识（附加到每条日志中，用于在 ELK 中区分来源）
+
+# Kubernetes 部署示例:
+# apiVersion: v1
+# kind: Pod
+# spec:
+#   containers:
+#   - name: ceph-exporter
+#     image: ceph-exporter:latest
+#   - name: filebeat
+#     image: elastic/filebeat:8.x
+#     volumeMounts:
+#     - name: filebeat-config
+#       mountPath: /usr/share/filebeat/filebeat.yml
+
+# -----------------------------------------------------------------------------
+# 场景 3: 生产环境 - 直接推送到 Logstash (TCP)
+# 日志通过 TCP 直接推送到 Logstash，可靠但需要保持连接
+# -----------------------------------------------------------------------------
+# 适用场景：需要可靠日志传输且不想部署 Filebeat 的环境
+# 特点：TCP 保证数据不丢失（有重传机制），但需要维持长连接
+# 注意：如果 Logstash 不可用，可能影响应用性能（连接阻塞）
+logger_prod_logstash_tcp:
+  level: "info"                 # 日志级别：info
+  format: "json"                # 输出格式：json
+  output: "stdout"              # 同时输出到 stdout（双重保险，即使 Logstash 断开也能看到日志）
+  enable_elk: true              # 启用 ELK 集成（应用内置 Logstash 客户端）
+  logstash_url: "logstash:5044" # Logstash 服务地址（使用 Docker 服务名解析）
+  logstash_protocol: "tcp"      # 传输协议：tcp（可靠传输，保证不丢包）
+  service_name: "ceph-exporter" # 服务名称标识
+
+# -----------------------------------------------------------------------------
+# 场景 4: 生产环境 - 直接推送到 Logstash (UDP)
+# 日志通过 UDP 推送，速度快但可能丢失
+# -----------------------------------------------------------------------------
+# 适用场景：对日志完整性要求不高、但对性能要求高的环境
+# 特点：UDP 无连接、无重传，速度快但可能丢包
+# 注意：网络不稳定时可能丢失日志，适合非关键日志
+logger_prod_logstash_udp:
+  level: "info"                 # 日志级别：info
+  format: "json"                # 输出格式：json
+  output: "stdout"              # 同时输出到 stdout
+  enable_elk: true              # 启用 ELK 集成
+  logstash_url: "logstash:5044" # Logstash 服务地址
+  logstash_protocol: "udp"      # 传输协议：udp（快速但不可靠，可能丢包）
+  service_name: "ceph-exporter" # 服务名称标识
+
+# -----------------------------------------------------------------------------
+# 场景 5: 生产环境 - 文件日志 + Filebeat 采集
+# 日志写入文件，由 Filebeat 监控并推送到 Logstash
+# -----------------------------------------------------------------------------
+# 适用场景：传统部署（非容器）或需要本地日志备份的环境
+# 特点：日志持久化到文件，支持滚动和压缩，由外部 Filebeat 进程采集
+# 优势：即使 ELK 集群故障，日志也不会丢失（保留在本地文件中）
+logger_prod_file:
+  level: "info"                 # 日志级别：info
+  format: "json"                # 输出格式：json（便于 Filebeat 解析）
+  output: "file"                # 输出目标：file（写入日志文件）
+  file_path: "/var/log/ceph-exporter/ceph-exporter.log"  # 日志文件路径
+  max_size: 100                 # 单个日志文件最大大小：100MB（超过后自动滚动）
+  max_backups: 3                # 最多保留旧日志文件数量：3 个
+  max_age: 28                   # 旧日志文件最大保留天数：28 天
+  compress: true                # 是否压缩旧日志文件：是（节省磁盘空间）
+  enable_elk: false             # 不直接推送到 ELK（由 Filebeat 处理采集和推送）
+  service_name: "ceph-exporter" # 服务名称标识
+
+# Filebeat 配置示例:
+# filebeat.inputs:
+# - type: log
+#   enabled: true
+#   paths:
+#     - /var/log/ceph-exporter/*.log
+#   json.keys_under_root: true
+#   json.add_error_key: true
+# output.logstash:
+#   hosts: ["logstash:5044"]
+
+# -----------------------------------------------------------------------------
+# 场景 6: 混合模式 - 文件 + Logstash 双重输出
+# 日志同时写入文件和推送到 Logstash
+# -----------------------------------------------------------------------------
+# 适用场景：对日志可靠性要求极高的关键生产环境
+# 特点：本地文件作为备份，同时实时推送到 ELK 进行分析
+# 优势：即使任一通道故障，另一通道仍可用
+# 注意：会消耗更多 I/O 和网络资源
+logger_prod_hybrid:
+  level: "info"                 # 日志级别：info
+  format: "json"                # 输出格式：json
+  output: "file"                # 主输出目标：file（写入本地文件）
+  file_path: "/var/log/ceph-exporter/ceph-exporter.log"  # 日志文件路径
+  max_size: 100                 # 单文件最大 100MB
+  max_backups: 3                # 保留 3 个备份文件
+  max_age: 28                   # 保留 28 天
+  compress: true                # 压缩旧日志文件
+  enable_elk: true              # 同时推送到 Logstash（双重输出）
+  logstash_url: "logstash:5044" # Logstash 服务地址
+  logstash_protocol: "tcp"      # 使用 TCP 协议（保证可靠传输）
+  service_name: "ceph-exporter" # 服务名称标识
+
+# -----------------------------------------------------------------------------
+# 快速切换指南
+# -----------------------------------------------------------------------------
+# 1. 开发调试: 复制 logger_dev 配置到 ceph-exporter.yaml
+# 2. 容器部署: 复制 logger_prod_container 配置 + 部署 Filebeat sidecar
+# 3. 直连 ELK: 复制 logger_prod_logstash_tcp 配置
+# 4. 文件日志: 复制 logger_prod_file 配置 + 配置 Filebeat
+# 5. 双重保险: 复制 logger_prod_hybrid 配置

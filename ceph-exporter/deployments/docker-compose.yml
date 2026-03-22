@@ -9,7 +9,7 @@
 # Usage:
 #   docker-compose up -d
 #   or
-#   ./scripts/deploy.sh up
+#   ./scripts/deploy.sh minimal
 #
 # Access URLs:
 #   - Prometheus: http://localhost:9090
@@ -139,7 +139,7 @@ services:
 
   # Alertmanager - Alert Manager
   alertmanager:
-    image: prom/alertmanager:v0.27.0
+    image: prom/alertmanager:v0.25.0
     container_name: alertmanager
     ports:
       - "9093:9093"

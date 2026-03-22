@@ -67,9 +67,9 @@ sudo chown -R 472:472 data/grafana data/test/grafana
 # Elasticsearch 需要 1000 用户权限
 sudo chown -R 1000:1000 data/elasticsearch
 
-# 其他服务使用当前用户权限
-sudo chown -R $USER:$USER data/prometheus data/alertmanager
-sudo chown -R $USER:$USER data/test/prometheus
+# Prometheus 需要 nobody 用户权限 (UID 65534)
+sudo chown -R 65534:65534 data/prometheus data/alertmanager
+sudo chown -R 65534:65534 data/test/prometheus
 ```
 
 或使用部署脚本自动初始化：
@@ -97,13 +97,13 @@ tar -czf grafana-data-$(date +%Y%m%d).tar.gz data/grafana/
 
 ```bash
 # 停止服务
-docker-compose down
+docker compose down
 
 # 恢复数据
 tar -xzf ceph-exporter-data-20260308.tar.gz
 
 # 启动服务
-docker-compose up -d
+docker compose up -d
 ```
 
 ---
@@ -114,7 +114,7 @@ docker-compose up -d
 
 ```bash
 # 停止并删除容器
-docker-compose down
+docker compose down
 
 # 删除数据目录
 rm -rf data/
@@ -124,13 +124,13 @@ rm -rf data/
 
 ```bash
 # 停止服务
-docker-compose stop prometheus
+docker compose stop prometheus
 
 # 删除数据
 rm -rf data/prometheus/*
 
 # 重启服务
-docker-compose start prometheus
+docker compose start prometheus
 ```
 
 ---
@@ -164,9 +164,9 @@ du -h --max-depth=2 data/
 
 ## 🔗 相关文档
 
-- [部署指南](../DEPLOYMENT_GUIDE.md)
+- [完整操作指南](../../Ceph-Exporter项目完整操作指南.md)
 - [Docker Compose 配置](./README.md)
-- [故障排查](../TROUBLESHOOTING.md)
+- [故障排查](./TROUBLESHOOTING.md)
 
 ---
 

@@ -40,9 +40,8 @@
 
 ## 📚 相关文档
 
-- [ELK 日志指南](../ceph-exporter/docs/ELK-LOGGING-GUIDE.md)
-- [ELK 实现总结](../ceph-exporter/docs/ELK-IMPLEMENTATION-SUMMARY.md)
-- [部署指南](../DEPLOYMENT_GUIDE.md)
+- [ELK 日志指南](../../ceph-exporter/docs/ELK-LOGGING-GUIDE.md)
+- [完整操作指南](../../Ceph-Exporter项目完整操作指南.md)
 
 ## 💡 提示
 

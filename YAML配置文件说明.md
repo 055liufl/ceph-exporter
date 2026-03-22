@@ -70,7 +70,10 @@ environment:
   - LOG_FORMAT=json                   # 日志格式: json/text
 
 # 资源限制
-mem_limit: 128m  # 内存限制，防止占用过多资源
+deploy:
+  resources:
+    limits:
+      memory: 128m  # 内存限制，防止占用过多资源
 
 # 健康检查
 healthcheck:
@@ -97,7 +100,10 @@ volumes:
   - prometheus_data:/prometheus  # 持久化数据卷
 
 # 资源限制
-mem_limit: 512m  # Prometheus 需要较多内存
+deploy:
+  resources:
+    limits:
+      memory: 512m  # Prometheus 需要较多内存
 ```
 
 #### Grafana 服务
@@ -123,32 +129,40 @@ volumes:
 ```yaml
 # 服务器配置
 server:
-  address: "0.0.0.0"  # 监听地址，0.0.0.0 表示所有网络接口
-  port: 9128          # 监听端口
+  host: "0.0.0.0"       # 监听地址，0.0.0.0 表示所有网络接口
+  port: 9128             # 监听端口
+  read_timeout: 30s      # HTTP 读超时
+  write_timeout: 30s     # HTTP 写超时
 
 # Ceph 连接配置
 ceph:
   config_file: "/etc/ceph/ceph.conf"  # Ceph 配置文件
   user: "admin"                        # Ceph 用户
+  keyring: "/etc/ceph/ceph.client.admin.keyring"  # Keyring 文件
   cluster: "ceph"                      # 集群名称
+  timeout: 10s                         # 命令执行超时
 
-# 采集器配置
-collectors:
-  cluster: true   # 集群状态采集器
-  pool: true      # 存储池采集器
-  osd: true       # OSD 采集器
-  monitor: true   # Monitor 采集器
-  health: true    # 健康状态采集器
-  mds: true       # MDS 采集器
-  rgw: true       # RGW 采集器
-
-# 采集间隔
-scrape_interval: 30s  # 每 30 秒采集一次
+# Prometheus 采集配置
+prometheus:
+  collect_interval: 15s  # 采集间隔
+  timeout: 10s           # 单次采集超时
 
 # 日志配置
-log:
-  level: "info"    # 日志级别
-  format: "json"   # 日志格式
+logger:
+  level: "info"          # 日志级别: trace/debug/info/warn/error/fatal/panic
+  format: "json"         # 日志格式: json/text
+  output: "stdout"       # 输出目标: stdout/stderr/file
+  file_path: "/var/log/ceph-exporter/ceph-exporter.log"  # 日志文件路径
+  max_size: 100          # 单个日志文件最大大小 (MB)
+  max_backups: 3         # 保留旧日志文件数量
+  max_age: 28            # 日志文件最大保留天数
+  compress: true         # 是否压缩归档日志
+
+  # ELK 集成（直接推送到 Logstash）
+  enable_elk: false              # 是否启用 Logstash 直推
+  logstash_url: "logstash:5000"  # Logstash 地址
+  logstash_protocol: "tcp"       # 协议: tcp/udp
+  service_name: "ceph-exporter"  # 服务标识名
 ```
 
 ---
@@ -201,10 +215,16 @@ prometheus:
 
 ```yaml
 ceph-exporter:
-  mem_limit: 256m  # 增加到 256MB
+  deploy:
+    resources:
+      limits:
+        memory: 256m  # 增加到 256MB
 
 prometheus:
-  mem_limit: 1g    # 增加到 1GB
+  deploy:
+    resources:
+      limits:
+        memory: 1g    # 增加到 1GB
 ```
 
 ### 修改日志级别
@@ -276,7 +296,7 @@ scrape_interval: 60s  # 改为 60 秒
 ### 查看配置文件
 
 ```bash
-# 查看 docker-compose 配置
+# 查看 docker compose 配置
 cat ceph-exporter/deployments/docker-compose.yml
 
 # 查看 ceph-exporter 配置
@@ -289,8 +309,8 @@ cat ceph-exporter/deployments/prometheus/prometheus.yml
 ### 验证配置
 
 ```bash
-# 验证 docker-compose 配置
-docker-compose -f ceph-exporter/deployments/docker-compose.yml config
+# 验证 docker compose 配置
+docker compose -f ceph-exporter/deployments/docker-compose.yml config
 
 # 验证 Prometheus 配置
 docker run --rm -v $(pwd)/ceph-exporter/deployments/prometheus:/etc/prometheus prom/prometheus:v2.51.0 promtool check config /etc/prometheus/prometheus.yml

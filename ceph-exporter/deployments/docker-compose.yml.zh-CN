@@ -49,18 +49,18 @@
 #
 # 【使用方法】
 #   启动所有服务:
-#     docker-compose up -d
+#     docker compose up -d
 #     或
 #     ./scripts/deploy.sh up
 #
 #   停止所有服务:
-#     docker-compose down
+#     docker compose down
 #
 #   查看服务状态:
-#     docker-compose ps
+#     docker compose ps
 #
 #   查看服务日志:
-#     docker-compose logs -f [服务名]
+#     docker compose logs -f [服务名]
 #
 # 【访问地址】
 #   - Prometheus: http://localhost:9090
@@ -98,11 +98,6 @@
 #      - 定期备份数据
 #
 # =============================================================================
-
-# -----------------------------------------------------------------------------
-# Docker Compose 文件格式版本
-# -----------------------------------------------------------------------------
-version: "2.1"
 
 # =============================================================================
 # 服务定义区域
@@ -251,10 +246,13 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 内存限制
+    # deploy.resources.limits.memory: 内存限制
     # 限制容器最多使用 128MB 内存
     # 防止内存泄漏影响宿主机
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
     # -------------------------------------------------------------------------
     # 日志配置
@@ -430,7 +428,7 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 512MB 内存限制
+    # deploy.resources.limits.memory: 512MB 内存限制
     # Prometheus 内存使用与以下因素相关:
     #   - 抓取目标数量
     #   - 指标数量 (cardinality)
@@ -444,7 +442,10 @@ services:
     #   - 监控 Prometheus 内存使用
     #   - 减少高基数标签 (high cardinality labels)
     #   - 使用 recording rules 预聚合数据
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
     logging:
       driver: json-file
@@ -600,7 +601,7 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 256MB 内存限制
+    # deploy.resources.limits.memory: 256MB 内存限制
     # Grafana 内存使用相对稳定
     # 主要影响因素:
     #   - 并发用户数
@@ -610,7 +611,10 @@ services:
     #   - 增加内存限制
     #   - 优化仪表板查询
     #   - 减少刷新频率
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
     logging:
       driver: json-file
@@ -646,7 +650,7 @@ services:
     # 版本兼容性:
     #   - 与 Prometheus 版本对应
     #   - 建议使用相近的版本
-    image: prom/alertmanager:v0.27.0
+    image: prom/alertmanager:v0.25.0
 
     container_name: alertmanager
 
@@ -724,13 +728,16 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 128MB 内存限制
+    # deploy.resources.limits.memory: 128MB 内存限制
     # Alertmanager 内存使用较少
     # 主要影响因素:
     #   - 活跃告警数量
     #   - 静默规则数量
     #   - 通知历史记录
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
     logging:
       driver: json-file
@@ -803,7 +810,7 @@ networks:
 #   停止服务并删除数据:
 #     ./scripts/deploy.sh clean
 #   或手动删除:
-#     docker-compose down && rm -rf data/
+#     docker compose down && rm -rf data/
 #
 # 【详细文档】
 #   查看完整的数据存储说明:
@@ -818,19 +825,19 @@ networks:
 # 【快速参考】
 #
 # 启动服务:
-#   docker-compose up -d
+#   docker compose up -d
 #
 # 停止服务:
-#   docker-compose down
+#   docker compose down
 #
 # 查看日志:
-#   docker-compose logs -f [服务名]
+#   docker compose logs -f [服务名]
 #
 # 重启服务:
-#   docker-compose restart [服务名]
+#   docker compose restart [服务名]
 #
 # 查看服务状态:
-#   docker-compose ps
+#   docker compose ps
 #
 # 进入容器:
 #   docker exec -it [容器名] sh
@@ -851,9 +858,9 @@ networks:
 #   tar -czf backup-$(date +%Y%m%d).tar.gz data/
 #
 # 恢复数据:
-#   docker-compose down
+#   docker compose down
 #   tar -xzf backup-20260308.tar.gz
-#   docker-compose up -d
+#   docker compose up -d
 #
 # 清理数据:
 #   ./scripts/deploy.sh clean

@@ -1,3 +1,23 @@
+// =============================================================================
+// Monitor Collector 单元测试
+// =============================================================================
+// 测试 Monitor 采集器的功能，包括:
+//   - Describe: 验证注册的指标描述符数量（4 个）
+//   - Collect: 验证每个 Monitor 的指标值和标签
+//   - CollectError: 验证 Ceph 命令失败时的错误处理
+//
+// 测试数据说明:
+//
+//	monDumpJSON 模拟 "ceph quorum_status -f json" 命令的输出，包含:
+//	- mon.a: 在 quorum 中，时钟偏移 0.001s，延迟 1.5ms
+//	- mon.b: 在 quorum 中，时钟偏移 -0.002s，延迟 2.3ms
+//	- mon.c: 不在 quorum 中，时钟偏移 0s，延迟 50ms（异常高）
+//
+// 重点测试:
+//   - InQuorum 布尔值到浮点数的转换（true->1.0, false->0.0）
+//   - 延迟从毫秒到秒的转换（除以 1000）
+//
+// =============================================================================
 package collector
 
 import (
@@ -6,6 +26,8 @@ import (
 	"ceph-exporter/internal/ceph"
 )
 
+// monDumpJSON 模拟 "ceph quorum_status -f json" 命令的输出
+// 包含三个 Monitor 的统计信息，其中 mon.c 不在 quorum 中
 const monDumpJSON = `{
 	"mons": [
 		{
@@ -38,6 +60,12 @@ const monDumpJSON = `{
 	]
 }`
 
+// TestMonitorCollector_Describe 测试 Monitor 采集器的指标描述符注册
+// 验证 MonitorCollector 注册了正确数量的指标描述符（4 个）:
+//   - in_quorum: Monitor 是否在仲裁中
+//   - store_bytes: Monitor 数据库存储大小
+//   - clock_skew_sec: Monitor 时钟偏移
+//   - latency_sec: Monitor 响应延迟
 func TestMonitorCollector_Describe(t *testing.T) {
 	log := newTestLogger()
 	client := ceph.NewTestClient(log, nil)
@@ -49,6 +77,12 @@ func TestMonitorCollector_Describe(t *testing.T) {
 	}
 }
 
+// TestMonitorCollector_Collect 测试 Monitor 采集器的指标采集
+// 验证:
+//   - 采集到的指标总数（3 个 Monitor * 4 个指标 = 12）
+//   - mon.a 和 mon.b 的 in_quorum 为 1（在仲裁中）
+//   - mon.c 的 in_quorum 为 0（不在仲裁中）
+//   - 延迟转换: mon.a 的 1.5ms / 1000 = 0.0015s
 func TestMonitorCollector_Collect(t *testing.T) {
 	log := newTestLogger()
 	client := ceph.NewTestClient(log, func(args []byte) ([]byte, string, error) {
@@ -95,6 +129,8 @@ func TestMonitorCollector_Collect(t *testing.T) {
 	}
 }
 
+// TestMonitorCollector_CollectError 测试 Ceph 命令失败时的错误处理
+// 验证采集器在命令失败时不会产生任何指标
 func TestMonitorCollector_CollectError(t *testing.T) {
 	log := newTestLogger()
 	client := ceph.NewTestClient(log, errMonCommand)

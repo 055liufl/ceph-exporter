@@ -39,7 +39,7 @@
 # Ubuntu 20.04 (Focal) - 默认仓库已包含 Ceph 15.x (Octopus)
 sudo apt-get install -y librados-dev librbd-dev
 
-# CentOS 7 (需要配置 Ceph Octopus 仓库)
+# CentOS 7 (需要配置 Ceph Octopus 仓库，不再是主要开发环境)
 sudo yum install -y librados-devel librbd-devel
 ```
 
@@ -162,12 +162,12 @@ Closes #123
 ### 编译项目
 
 ```bash
-# 基本编译 (启用 CGO)
+# 基本编译 (启用 CGO，需要 -tags octopus)
 cd ceph-exporter
-CGO_ENABLED=1 go build -o build/ceph-exporter ./cmd/ceph-exporter
+CGO_ENABLED=1 go build -tags octopus -o build/ceph-exporter ./cmd/ceph-exporter
 
 # 带版本信息编译
-CGO_ENABLED=1 go build -v \
+CGO_ENABLED=1 go build -tags octopus -v \
   -ldflags "-X main.version=dev -X main.buildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') -X main.gitCommit=$(git rev-parse --short HEAD)" \
   -o build/ceph-exporter ./cmd/ceph-exporter
 
@@ -179,13 +179,13 @@ make build
 
 ```bash
 # 运行所有测试
-CGO_ENABLED=1 go test -v ./internal/...
+CGO_ENABLED=1 go test -tags octopus -v ./internal/...
 
 # 运行特定包的测试
-CGO_ENABLED=1 go test -v ./internal/collector/...
+CGO_ENABLED=1 go test -tags octopus -v ./internal/collector/...
 
 # 运行单个测试
-CGO_ENABLED=1 go test -v -run TestClusterCollector ./internal/collector/
+CGO_ENABLED=1 go test -tags octopus -v -run TestClusterCollector ./internal/collector/
 
 # 使用 Makefile
 make test
@@ -196,7 +196,7 @@ make test
 ```bash
 # 生成覆盖率报告
 mkdir -p build
-CGO_ENABLED=1 go test -v -coverprofile=build/coverage.out -covermode=atomic ./internal/...
+CGO_ENABLED=1 go test -tags octopus -v -coverprofile=build/coverage.out -covermode=atomic ./internal/...
 
 # 查看覆盖率统计
 go tool cover -func=build/coverage.out
@@ -228,7 +228,7 @@ make lint
 cd test/integration
 
 # 运行集成测试
-CGO_ENABLED=1 go test -v -timeout 30m
+CGO_ENABLED=1 go test -tags octopus -v -timeout 30m
 
 # 或使用脚本
 ./run-integration-tests.sh
@@ -245,7 +245,7 @@ make test-integration
 
 ```bash
 # 编译
-CGO_ENABLED=1 go build -o build/ceph-exporter ./cmd/ceph-exporter
+CGO_ENABLED=1 go build -tags octopus -o build/ceph-exporter ./cmd/ceph-exporter
 
 # 运行 (需要 Ceph 集群)
 ./build/ceph-exporter -config configs/ceph-exporter.yaml
@@ -262,7 +262,7 @@ cd deployments
 ./scripts/deploy.sh full
 
 # 查看日志
-docker-compose logs -f ceph-exporter
+docker compose logs -f ceph-exporter
 
 # 进入容器调试
 docker exec -it ceph-exporter sh
@@ -389,7 +389,7 @@ ceph-exporter/
 **解决**:
 ```bash
 # 安装 Ceph 开发库
-sudo yum install -y librados-devel librbd-devel
+sudo apt-get install -y librados-dev librbd-dev
 ```
 
 ### 2. 测试失败
@@ -398,8 +398,8 @@ sudo yum install -y librados-devel librbd-devel
 
 **解决**:
 ```bash
-# 确保启用 CGO
-CGO_ENABLED=1 go test -v ./internal/...
+# 确保启用 CGO 和 octopus 构建标签
+CGO_ENABLED=1 go test -tags octopus -v ./internal/...
 
 # 清理缓存
 go clean -testcache

@@ -47,13 +47,13 @@
 #
 # 【使用方法】
 #   启动测试环境:
-#     docker-compose -f docker-compose-integration-test.yml up -d
+#     docker compose -f docker-compose-integration-test.yml up -d
 #
 #   等待服务就绪:
-#     docker-compose -f docker-compose-integration-test.yml ps
+#     docker compose -f docker-compose-integration-test.yml ps
 #
 #   查看测试日志:
-#     docker-compose -f docker-compose-integration-test.yml logs -f
+#     docker compose -f docker-compose-integration-test.yml logs -f
 #
 #   执行测试:
 #     # 测试 ceph-exporter 健康检查
@@ -66,7 +66,7 @@
 #     curl http://localhost:9090/api/v1/targets
 #
 #   清理测试环境:
-#     docker-compose -f docker-compose-integration-test.yml down -v
+#     docker compose -f docker-compose-integration-test.yml down -v
 #
 # 【访问地址】
 #   - Ceph Dashboard: http://localhost:8080
@@ -77,12 +77,10 @@
 # 【注意事项】
 #   1. 测试环境使用独立的容器名称 (带 -test 后缀)
 #   2. 测试环境使用独立的数据卷
-#   3. 测试完成后建议清理数据卷 (docker-compose down -v)
+#   3. 测试完成后建议清理数据卷 (docker compose down -v)
 #   4. 不要在生产环境使用此配置
 #
 # =============================================================================
-
-version: "2.1"
 
 # =============================================================================
 # 服务定义区域
@@ -105,13 +103,13 @@ services:
     # -------------------------------------------------------------------------
     # 镜像配置
     # -------------------------------------------------------------------------
-    # image: 使用 ceph/demo 镜像 (注意不是 ceph/daemon)
-    # latest-nautilus: Nautilus 版本 (Ceph 14.x)
-    # demo 镜像特点:
-    #   - 专为演示和测试设计
-    #   - 启动速度更快
-    #   - 配置更简单
-    image: ceph/demo:latest-nautilus
+    # image: 使用 quay.io/ceph/daemon 镜像
+    # latest-octopus: Octopus 版本 (Ceph 15.x)
+    # daemon 镜像特点:
+    #   - Ceph 官方维护的守护进程镜像
+    #   - 通过 CEPH_DAEMON=demo 环境变量启动演示模式
+    #   - 支持多种运行模式
+    image: quay.io/ceph/daemon:latest-octopus
 
     # -------------------------------------------------------------------------
     # 容器标识
@@ -128,6 +126,10 @@ services:
     # 环境变量配置
     # -------------------------------------------------------------------------
     environment:
+      # CEPH_DAEMON: Ceph 守护进程运行模式
+      # demo: 演示模式,自动初始化完整的单节点集群
+      - CEPH_DAEMON=demo
+
       # MON_IP: Monitor 服务 IP 地址
       # 172.20.0.10: 在测试网络中的固定 IP
       # 必须与下方 networks 配置一致
@@ -184,16 +186,16 @@ services:
       # 需要共享给 ceph-exporter
       - ./data/test/ceph-demo/config:/etc/ceph
 
-    # -------------------------------------------------------------------------
-    # 特权模式
-    # -------------------------------------------------------------------------
-    # privileged: true
-    # Ceph 需要特权模式管理存储设备
       # 时区配置挂载 (只读)
       # 确保容器时间与宿主机一致，用于准确的日志时间戳和监控数据
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+    # -------------------------------------------------------------------------
+    # 特权模式
+    # -------------------------------------------------------------------------
+    # privileged: true
+    # Ceph 需要特权模式管理存储设备
     privileged: true
 
     # -------------------------------------------------------------------------
@@ -206,13 +208,16 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 1024MB (1GB)
+    # deploy.resources.limits.memory: 1024MB (1GB)
     # Ceph Demo 需要较多内存
     # 如果内存不足,可能导致:
     #   - OSD 启动失败
     #   - 集群状态异常
     #   - 测试失败
-    mem_limit: 1024m
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
 
   # ===========================================================================
   # ceph-exporter 服务 - 被测试的指标导出器
@@ -266,14 +271,14 @@ services:
       # 测试配置文件
       - ../configs/ceph-exporter.yaml:/etc/ceph-exporter/ceph-exporter.yaml:ro
 
-    # -------------------------------------------------------------------------
-    # 环境变量配置
-    # -------------------------------------------------------------------------
       # 时区配置挂载 (只读)
       # 确保容器时间与宿主机一致，用于准确的日志时间戳和监控数据
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+    # -------------------------------------------------------------------------
+    # 环境变量配置
+    # -------------------------------------------------------------------------
     environment:
       # CEPH_CONFIG: Ceph 配置文件路径
       - CEPH_CONFIG=/etc/ceph/ceph.conf
@@ -337,9 +342,12 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 128MB
+    # deploy.resources.limits.memory: 128MB
     # ceph-exporter 内存使用较少
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   # ===========================================================================
   # Prometheus 服务 - 时序数据库 (测试用)
@@ -377,14 +385,14 @@ services:
       # 存储测试期间的时序数据
       - ./data/test/prometheus:/prometheus
 
-    # -------------------------------------------------------------------------
-    # 启动命令
-    # -------------------------------------------------------------------------
       # 时区配置挂载 (只读)
       # 确保容器时间与宿主机一致，用于准确的日志时间戳和监控数据
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+    # -------------------------------------------------------------------------
+    # 启动命令
+    # -------------------------------------------------------------------------
     command:
       # --config.file: 配置文件路径
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -427,7 +435,10 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   # ===========================================================================
   # Grafana 服务 - 可视化平台 (测试用)
@@ -469,14 +480,14 @@ services:
       # 仪表板 JSON 文件 (只读)
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
 
-    # -------------------------------------------------------------------------
-    # 环境变量配置
-    # -------------------------------------------------------------------------
       # 时区配置挂载 (只读)
       # 确保容器时间与宿主机一致，用于准确的日志时间戳和监控数据
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+    # -------------------------------------------------------------------------
+    # 环境变量配置
+    # -------------------------------------------------------------------------
     environment:
       # GF_SECURITY_ADMIN_USER: 管理员用户名
       # 测试环境使用默认账号
@@ -519,7 +530,10 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
 # =============================================================================
 # 网络配置区域
@@ -573,7 +587,7 @@ networks:
 #
 # 【清理测试数据】
 #   停止服务并删除测试数据:
-#     docker-compose -f docker-compose-integration-test.yml down
+#     docker compose -f docker-compose-integration-test.yml down
 #     rm -rf data/test/
 #
 # 【详细文档】
@@ -609,7 +623,7 @@ networks:
 # set -e
 #
 # echo "启动测试环境..."
-# docker-compose -f docker-compose-integration-test.yml up -d
+# docker compose -f docker-compose-integration-test.yml up -d
 #
 # echo "等待服务就绪..."
 # sleep 60
@@ -626,6 +640,6 @@ networks:
 # echo "所有测试通过!"
 #
 # echo "清理测试环境..."
-# docker-compose -f docker-compose-integration-test.yml down -v
+# docker compose -f docker-compose-integration-test.yml down -v
 #
 # =============================================================================

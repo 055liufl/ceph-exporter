@@ -1,3 +1,25 @@
+// =============================================================================
+// RGW Collector 单元测试
+// =============================================================================
+// 测试 RGW（RADOS Gateway）采集器的功能，包括:
+//   - Describe: 验证注册的指标描述符数量（3 个）
+//   - Collect: 验证 RGW 守护进程的状态统计
+//   - NoRGWService: 验证没有 RGW 服务时的处理
+//   - CollectError: 验证 Ceph 命令失败时的错误处理
+//
+// 测试数据说明:
+//
+//	serviceDumpJSON 模拟 "ceph service dump -f json" 命令的输出，包含:
+//	- rgw.store1: 地址 10.0.0.1:7480
+//	- rgw.store2: 地址 10.0.0.2:7480
+//	两个 RGW 守护进程都被视为 active 状态
+//
+// 重点测试:
+//   - 从 service dump 中正确解析 RGW 守护进程信息
+//   - 没有 RGW 服务时返回 total=0
+//   - daemon_status 指标的 name 标签
+//
+// =============================================================================
 package collector
 
 import (
@@ -6,6 +28,8 @@ import (
 	"ceph-exporter/internal/ceph"
 )
 
+// serviceDumpJSON 模拟 "ceph service dump -f json" 命令的输出
+// 包含两个 RGW 守护进程的信息
 const serviceDumpJSON = `{
 	"services": {
 		"rgw": {
@@ -23,6 +47,11 @@ const serviceDumpJSON = `{
 	}
 }`
 
+// TestRGWCollector_Describe 测试 RGW 采集器的指标描述符注册
+// 验证 RGWCollector 注册了正确数量的指标描述符（3 个）:
+//   - total: RGW 守护进程总数
+//   - active_total: active 状态的 RGW 数量
+//   - daemon_status: 每个 RGW 守护进程的状态（带 name 标签）
 func TestRGWCollector_Describe(t *testing.T) {
 	log := newTestLogger()
 	client := ceph.NewTestClient(log, nil)
@@ -34,6 +63,11 @@ func TestRGWCollector_Describe(t *testing.T) {
 	}
 }
 
+// TestRGWCollector_Collect 测试 RGW 采集器的指标采集
+// 验证:
+//   - 采集到的指标总数: total(1) + active_total(1) + 2 个 daemon_status = 4
+//   - total 值为 2（两个 RGW 守护进程）
+//   - active_total 值为 2（所有守护进程都是 active）
 func TestRGWCollector_Collect(t *testing.T) {
 	log := newTestLogger()
 	client := ceph.NewTestClient(log, func(args []byte) ([]byte, string, error) {
@@ -66,6 +100,10 @@ func TestRGWCollector_Collect(t *testing.T) {
 	}
 }
 
+// TestRGWCollector_NoRGWService 测试没有 RGW 服务时的处理
+// 当 service dump 中没有 rgw 服务时，验证:
+//   - 采集到的指标总数: total(1) + active_total(1) = 2（无 daemon_status）
+//   - total 值为 0
 func TestRGWCollector_NoRGWService(t *testing.T) {
 	noRGW := `{"services": {}}`
 	log := newTestLogger()
@@ -86,6 +124,8 @@ func TestRGWCollector_NoRGWService(t *testing.T) {
 	}
 }
 
+// TestRGWCollector_CollectError 测试 Ceph 命令失败时的错误处理
+// 验证采集器在命令失败时不会产生任何指标
 func TestRGWCollector_CollectError(t *testing.T) {
 	log := newTestLogger()
 	client := ceph.NewTestClient(log, errMonCommand)

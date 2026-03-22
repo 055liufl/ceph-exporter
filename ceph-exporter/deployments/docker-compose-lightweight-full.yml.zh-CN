@@ -20,6 +20,7 @@
 #      - elasticsearch: 日志存储和搜索引擎
 #      - logstash: 日志收集和处理
 #      - kibana: 日志可视化界面
+#      - filebeat-sidecar: 容器日志收集
 #
 #   4. 追踪层:
 #      - jaeger: 分布式追踪系统
@@ -35,12 +36,13 @@
 #     - prometheus: 512MB
 #     - elasticsearch: 512MB
 #     - grafana: 256MB
-#     - kibana: 512MB
+#     - kibana: 1024MB
 #     - jaeger: 256MB
-#     - logstash: 256MB
+#     - logstash: 768MB
 #     - alertmanager: 128MB
 #     - ceph-exporter: 128MB
-#     总计: 约 3.5GB + 系统开销
+#     - filebeat-sidecar: 128MB
+#     总计: 约 3.7GB + 系统开销
 #
 # 【使用场景】
 #   ✓ CentOS 7 + Docker 完整测试环境
@@ -57,26 +59,26 @@
 #
 #   2. Docker 环境:
 #      - Docker 19.03+
-#      - Docker Compose 1.25+
+#      - Docker Compose 插件 (docker compose)
 #
 # 【使用方法】
-#   方法 1: 使用 docker-compose
-#     docker-compose -f docker-compose-lightweight-full.yml up -d
+#   方法 1: 使用 docker compose
+#     docker compose -f docker-compose-lightweight-full.yml up -d
 #
 #   方法 2: 使用部署脚本 (推荐)
 #     ./scripts/deploy.sh full
 #
 #   查看服务状态:
-#     docker-compose -f docker-compose-lightweight-full.yml ps
+#     docker compose -f docker-compose-lightweight-full.yml ps
 #
 #   查看服务日志:
-#     docker-compose -f docker-compose-lightweight-full.yml logs -f [服务名]
+#     docker compose -f docker-compose-lightweight-full.yml logs -f [服务名]
 #
 #   停止所有服务:
-#     docker-compose -f docker-compose-lightweight-full.yml down
+#     docker compose -f docker-compose-lightweight-full.yml down
 #
 #   清理所有数据:
-#     docker-compose -f docker-compose-lightweight-full.yml down -v
+#     docker compose -f docker-compose-lightweight-full.yml down -v
 #
 # 【访问地址】
 #   存储层:
@@ -100,10 +102,10 @@
 #   本配置针对资源受限环境进行了以下优化:
 #
 #   1. 内存限制:
-#      - 所有服务都设置了 mem_limit
+#      - 所有服务都设置了 deploy.resources.limits.memory
 #      - Elasticsearch JVM 堆内存: 256MB (默认 1GB)
-#      - Logstash JVM 堆内存: 128MB (默认 1GB)
-#      - Kibana Node.js 内存: 384MB (默认 1GB)
+#      - Logstash JVM 堆内存: 512MB (默认 1GB)
+#      - Kibana Node.js 内存: 896MB (默认 1GB)
 #
 #   2. 数据保留:
 #      - Prometheus 保留 7 天 (默认 15 天)
@@ -129,7 +131,7 @@
 # 【故障排查】
 #   1. 服务无法启动:
 #      - 检查内存是否足够: docker stats
-#      - 检查日志: docker-compose logs [服务名]
+#      - 检查日志: docker compose logs [服务名]
 #      - 增加系统内存或调整 Docker 资源限制
 #
 #   2. Elasticsearch 启动失败:
@@ -143,8 +145,6 @@
 #      - 解决: 增加内存或减少服务数量
 #
 # =============================================================================
-
-version: "2.1"
 
 # =============================================================================
 # 服务定义区域
@@ -170,7 +170,10 @@ services:
     # -------------------------------------------------------------------------
     # 镜像配置
     # -------------------------------------------------------------------------
-    image: ceph/daemon:latest-nautilus
+    # image: 使用 quay.io/ceph/daemon 镜像
+    # latest-octopus: Octopus 版本 (Ceph 15.x)
+    # 通过 CEPH_DAEMON=demo 环境变量启动演示模式
+    image: quay.io/ceph/daemon:latest-octopus
 
     container_name: ceph-demo
     hostname: ceph-demo
@@ -216,10 +219,10 @@ services:
     # -------------------------------------------------------------------------
     ports:
       # Ceph Dashboard / RGW 端口
-      - "8080:8080"
+      - "8080:8080"  # RGW (RADOS Gateway) - S3/Swift 对象存储 API
 
       # RGW 对象存储 API 端口
-      - "5000:5000"
+      - "5000:5000"  # RGW 备用端口
 
     # -------------------------------------------------------------------------
     # 网络配置
@@ -253,7 +256,7 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制 (轻量化配置)
     # -------------------------------------------------------------------------
-    # mem_limit: 1024MB (1GB)
+    # deploy.resources.limits.memory: 1024MB (1GB)
     # 轻量级配置,适合资源受限环境
     # 标准配置建议 2-4GB
     #
@@ -261,7 +264,10 @@ services:
     #   - 内存不足可能导致 OSD 启动失败
     #   - 性能会受到一定影响
     #   - 不适合高负载场景
-    mem_limit: 1024m
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
 
   # ===========================================================================
   # 监控层
@@ -343,9 +349,12 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 128MB
+    # deploy.resources.limits.memory: 128MB
     # ceph-exporter 内存使用较少
-    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   # ---------------------------------------------------------------------------
   # prometheus: 时序数据库
@@ -413,10 +422,13 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 512MB
+    # deploy.resources.limits.memory: 512MB
     # 轻量级配置
     # 标准配置建议 1-2GB
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   # ---------------------------------------------------------------------------
   # grafana: 可视化仪表板
@@ -485,9 +497,12 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 256MB
+    # deploy.resources.limits.memory: 256MB
     # 轻量级配置
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   # ---------------------------------------------------------------------------
   # alertmanager: 告警管理器
@@ -540,8 +555,89 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 128MB
-    mem_limit: 128m
+    # deploy.resources.limits.memory: 128MB
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  # ===========================================================================
+  # Filebeat Sidecar - 容器日志收集（方案2）
+  # ===========================================================================
+  # 【服务功能】
+  #   - 自动收集 Docker 容器日志
+  #   - 将日志发送到 Logstash 进行处理
+  #   - 使用 sidecar 模式运行
+  #
+  # 【工作原理】
+  #   - 挂载 Docker 容器日志目录
+  #   - 通过 Docker Socket 获取容器元数据
+  #   - 使用 Filebeat 配置文件定义日志收集规则
+  #   - 将日志转发到 Logstash 的 Beats 输入端口 (5044)
+  #
+  filebeat-sidecar:
+    # -------------------------------------------------------------------------
+    # 镜像配置
+    # -------------------------------------------------------------------------
+    # image: Elastic 官方 Filebeat 镜像
+    # 7.17.0: 与 ELK Stack 版本保持一致
+    image: docker.elastic.co/beats/filebeat:7.17.0
+
+    container_name: filebeat-sidecar
+
+    # user: root
+    # Filebeat 需要 root 权限访问 Docker 容器日志和 Docker Socket
+    user: root
+
+    # -------------------------------------------------------------------------
+    # 数据卷挂载
+    # -------------------------------------------------------------------------
+    volumes:
+      # Filebeat 配置文件 (只读)
+      # 定义日志收集规则和输出目标
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+
+      # Docker 容器日志目录 (只读)
+      # Filebeat 从此目录读取容器日志文件
+      - /home/docker/containers:/var/lib/docker/containers:ro
+
+      # Docker Socket (只读)
+      # 用于获取容器元数据 (容器名称、标签等)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # 时区配置挂载 (只读)
+      # 确保容器时间与宿主机一致
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+    # -------------------------------------------------------------------------
+    # 网络配置
+    # -------------------------------------------------------------------------
+    networks:
+      # logging-network: 连接到日志系统
+      # 与 Logstash 通信
+      - logging-network
+
+    restart: unless-stopped
+
+    # -------------------------------------------------------------------------
+    # 服务依赖
+    # -------------------------------------------------------------------------
+    # 依赖 logstash 和 ceph-exporter
+    # 确保日志处理管道和被监控服务先启动
+    depends_on:
+      - logstash
+      - ceph-exporter
+
+    # -------------------------------------------------------------------------
+    # 资源限制
+    # -------------------------------------------------------------------------
+    # deploy.resources.limits.memory: 128MB
+    # Filebeat 轻量级日志收集器,内存使用较少
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   # ===========================================================================
   # 日志层 (ELK Stack) - 轻量级配置
@@ -639,7 +735,7 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 512MB
+    # deploy.resources.limits.memory: 512MB
     # 包含 JVM 堆内存 (256MB) + 堆外内存
     # 轻量级配置,标准配置建议 2GB 或更多
     #
@@ -647,7 +743,10 @@ services:
     #   - 内存不足会导致 OOM
     #   - 影响索引和搜索性能
     #   - 限制可存储的数据量
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   # ---------------------------------------------------------------------------
   # logstash: 日志收集和处理
@@ -657,9 +756,9 @@ services:
   #   - 解析和转换日志
   #   - 发送到 Elasticsearch
   #
-  # 【轻量化配置】
-  #   - JVM 堆内存: 128MB (默认 1GB)
-  #   - 简化的处理管道
+  # 【配置说明】
+  #   - JVM 堆内存: 512MB
+  #   - 容器内存限制: 768MB
   #
   logstash:
     # -------------------------------------------------------------------------
@@ -727,9 +826,13 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 256MB
-    # 轻量级配置
-    mem_limit: 256m
+    # deploy.resources.limits.memory: 768MB
+    # 包含 JVM 堆内存 (512MB) + 堆外内存
+    # 确保 Logstash 有足够内存进行日志处理
+    deploy:
+      resources:
+        limits:
+          memory: 768m
 
   # ---------------------------------------------------------------------------
   # kibana: 日志可视化界面
@@ -740,7 +843,7 @@ services:
   #   - 创建仪表板和图表
   #
   # 【轻量化配置】
-  #   - Node.js 内存限制: 384MB
+  #   - Node.js 内存限制: 896MB
   #
   kibana:
     # -------------------------------------------------------------------------
@@ -778,6 +881,10 @@ services:
       #   - 建议配置: 896MB (轻量级) 或 1GB+ (标准)
       - NODE_OPTIONS=--max-old-space-size=896
 
+      # I18N_LOCALE: Kibana 界面语言
+      # zh-CN: 简体中文界面
+      - I18N_LOCALE=zh-CN
+
     # -------------------------------------------------------------------------
     # 数据卷挂载
     # -------------------------------------------------------------------------
@@ -807,15 +914,17 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 1024MB (1GB)
+    # deploy.resources.limits.memory: 1024MB (1GB)
     # 包含 Node.js 堆内存 (896MB) + 其他开销 (~128MB)
     # 优化配置，避免内存溢出
     #
     # 说明:
-    #   - 之前的 512MB 配置会导致内存不足
     #   - 1GB 是 Kibana 7.x 的推荐最小内存
     #   - 生产环境建议 2GB 或更多
-    mem_limit: 1024m
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
 
   # ===========================================================================
   # 追踪层 (Tracing System)
@@ -889,23 +998,23 @@ services:
       # Jaeger UI 端口
       # 16686: Web 界面端口
       # 用于查看追踪数据和服务拓扑
-      - "16686:16686"
+      - "16686:16686"  # Jaeger UI
 
       # Collector HTTP 端口
       # 14268: 接收追踪数据的 HTTP 端口
       # 客户端可以通过此端口发送追踪数据
-      - "14268:14268"
+      - "14268:14268"  # Collector HTTP
 
       # OTLP HTTP 端口
       # 4318: OpenTelemetry Protocol HTTP 端口
       # 用于接收 OTLP 格式的追踪数据
-      - "4318:4318"
+      - "4318:4318"    # OTLP HTTP
 
       # Jaeger Compact Thrift 端口
       # 6831/udp: UDP 协议端口
       # 用于接收 Jaeger Thrift 格式的追踪数据
       # 性能较好,适合高吞吐量场景
-      - "6831:6831/udp"
+      - "6831:6831/udp"  # Jaeger compact thrift
 
     # -------------------------------------------------------------------------
     # 网络配置
@@ -913,6 +1022,10 @@ services:
     networks:
       # tracing-network: 追踪专用网络
       - tracing-network
+
+      # monitor-network: 监控网络
+      # 与 Prometheus 等监控组件通信
+      - monitor-network
 
     # -------------------------------------------------------------------------
     # 重启策略
@@ -922,10 +1035,13 @@ services:
     # -------------------------------------------------------------------------
     # 资源限制
     # -------------------------------------------------------------------------
-    # mem_limit: 256MB
+    # deploy.resources.limits.memory: 256MB
     # 轻量级配置
     # All-in-One 模式内存使用较少
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
 # =============================================================================
 # 网络配置区域
@@ -964,6 +1080,7 @@ networks:
   #   - prometheus: 时序数据库
   #   - grafana: 可视化平台
   #   - alertmanager: 告警管理器
+  #   - jaeger: 追踪系统
   monitor-network:
     driver: bridge
 
@@ -978,6 +1095,8 @@ networks:
   #   - elasticsearch: 日志存储
   #   - logstash: 日志处理
   #   - kibana: 日志可视化
+  #   - filebeat-sidecar: 日志收集
+  #   - ceph-exporter: 日志源
   logging-network:
     driver: bridge
 
@@ -990,6 +1109,7 @@ networks:
   #
   # 连接的服务:
   #   - jaeger: 追踪系统
+  #   - ceph-exporter: 追踪数据源
   tracing-network:
     driver: bridge
 
@@ -1034,7 +1154,7 @@ networks:
 #   停止服务并删除数据:
 #     ./scripts/deploy.sh clean
 #   或手动删除:
-#     docker-compose down && rm -rf data/
+#     docker compose down && rm -rf data/
 #
 # 【详细文档】
 #   查看完整的数据存储说明:
@@ -1049,25 +1169,25 @@ networks:
 # 【快速参考】
 #
 # 启动所有服务:
-#   docker-compose -f docker-compose-lightweight-full.yml up -d
+#   docker compose -f docker-compose-lightweight-full.yml up -d
 #
 # 查看服务状态:
-#   docker-compose -f docker-compose-lightweight-full.yml ps
+#   docker compose -f docker-compose-lightweight-full.yml ps
 #
 # 查看资源使用:
 #   docker stats
 #
 # 查看特定服务日志:
-#   docker-compose -f docker-compose-lightweight-full.yml logs -f [服务名]
+#   docker compose -f docker-compose-lightweight-full.yml logs -f [服务名]
 #
 # 重启特定服务:
-#   docker-compose -f docker-compose-lightweight-full.yml restart [服务名]
+#   docker compose -f docker-compose-lightweight-full.yml restart [服务名]
 #
 # 停止所有服务:
-#   docker-compose -f docker-compose-lightweight-full.yml down
+#   docker compose -f docker-compose-lightweight-full.yml down
 #
 # 清理所有数据:
-#   docker-compose -f docker-compose-lightweight-full.yml down -v
+#   docker compose -f docker-compose-lightweight-full.yml down -v
 #
 # 【服务启动顺序】
 #   1. ceph-demo (约 30-60 秒)
@@ -1077,14 +1197,15 @@ networks:
 #   5. alertmanager (约 5 秒)
 #   6. elasticsearch (约 30-60 秒)
 #   7. logstash (约 20 秒)
-#   8. kibana (约 30 秒)
-#   9. jaeger (约 5 秒)
+#   8. filebeat-sidecar (约 5 秒)
+#   9. kibana (约 30 秒)
+#   10. jaeger (约 5 秒)
 #
 #   总启动时间: 约 2-3 分钟
 #
 # 【健康检查】
 #   检查所有服务是否正常:
-#     for service in ceph-demo ceph-exporter prometheus grafana alertmanager elasticsearch kibana jaeger; do
+#     for service in ceph-demo ceph-exporter prometheus grafana alertmanager elasticsearch kibana jaeger filebeat-sidecar; do
 #       echo "Checking $service..."
 #       docker inspect $service | jq '.[0].State.Health.Status'
 #     done
@@ -1095,7 +1216,7 @@ networks:
 #
 # 【故障排查】
 #   1. 查看容器状态:
-#      docker-compose -f docker-compose-lightweight-full.yml ps
+#      docker compose -f docker-compose-lightweight-full.yml ps
 #
 #   2. 查看容器日志:
 #      docker logs [容器名] --tail 100
@@ -1129,7 +1250,7 @@ networks:
 #       alpine tar xzf /backup/full-backup.tar.gz -C /
 #
 # 【优化建议】
-#   1. 如果内存充足,可以增加各服务的 mem_limit
+#   1. 如果内存充足,可以增加各服务的内存限制
 #   2. 如果磁盘空间充足,可以增加数据保留时间
 #   3. 如果不需要某些功能,可以注释掉对应的服务
 #   4. 生产环境建议使用标准配置,不要使用轻量级配置

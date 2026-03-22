@@ -121,7 +121,7 @@ diagnose_ceph_exporter() {
         echo "修复命令:"
         echo "  sudo chmod 644 $DEPLOY_DIR/data/ceph-demo/config/*.keyring"
         echo "  cd $DEPLOY_DIR && ln -s ../configs configs"
-        echo "  docker-compose restart ceph-exporter"
+        echo "  docker compose restart ceph-exporter"
         echo ""
     fi
 }
@@ -352,10 +352,10 @@ show_fix_suggestions() {
     echo "   sudo ./scripts/deploy.sh init"
     echo ""
     echo "3. 重启失败的服务:"
-    echo "   docker-compose restart <service-name>"
+    echo "   docker compose restart <service-name>"
     echo ""
     echo "4. 查看详细故障排查指南:"
-    echo "   cat ../TROUBLESHOOTING.md"
+    echo "   cat TROUBLESHOOTING.md"
     echo ""
     echo "5. 完全重新部署:"
     echo "   sudo ./scripts/deploy.sh clean"

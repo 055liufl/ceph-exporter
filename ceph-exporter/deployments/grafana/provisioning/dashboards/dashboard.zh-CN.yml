@@ -11,7 +11,7 @@ apiVersion: 1
 
 providers:
   # Ceph 监控仪表盘提供者
-  - name: "Ceph Dashboards"            # 提供者名称
+  - name: "Ceph 仪表盘"                  # 提供者名称
     orgId: 1                            # 组织 ID（默认组织）
     folder: "Ceph"                      # 仪表盘存放的文件夹名称
     type: file                          # 类型: 从文件加载

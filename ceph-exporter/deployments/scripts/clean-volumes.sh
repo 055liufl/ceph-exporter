@@ -34,10 +34,10 @@ cd "$DEPLOY_DIR"
 
 echo ""
 echo "步骤 1: 停止所有服务..."
-docker-compose -f docker-compose-ceph-demo.yml down 2>/dev/null || true
-docker-compose -f docker-compose-lightweight-full.yml down 2>/dev/null || true
-docker-compose -f docker-compose-integration-test.yml down 2>/dev/null || true
-docker-compose down 2>/dev/null || true
+docker compose -f docker-compose-ceph-demo.yml down 2>/dev/null || true
+docker compose -f docker-compose-lightweight-full.yml down 2>/dev/null || true
+docker compose -f docker-compose-integration-test.yml down 2>/dev/null || true
+docker compose down 2>/dev/null || true
 
 echo ""
 echo "步骤 2: 删除数据目录..."
@@ -55,7 +55,7 @@ echo "步骤 3: 重新初始化数据目录..."
 
 echo ""
 echo "步骤 4: 启动 Ceph Demo..."
-docker-compose -f docker-compose-ceph-demo.yml up -d
+docker compose -f docker-compose-ceph-demo.yml up -d
 
 echo ""
 echo "步骤 5: 等待 Ceph 初始化（5 分钟）..."

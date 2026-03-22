@@ -1,3 +1,19 @@
+// =============================================================================
+// 容器间网络通信测试
+// =============================================================================
+// 测试 Docker 容器之间的网络连通性，验证各服务的 HTTP 端点是否可达。
+// 包含重试机制（最多 5 次，每次间隔 2 秒），以应对服务启动延迟。
+//
+// 测试的端点:
+//   - ceph-exporter: /health, /ready, /metrics
+//   - Prometheus: /-/healthy, /-/ready
+//   - Grafana: /api/health
+//
+// 注意:
+//   - 使用 -short 标志可跳过此测试
+//   - 测试前会等待 10 秒让服务完全启动
+//
+// =============================================================================
 package integration
 
 import (
@@ -9,8 +25,8 @@ import (
 	"time"
 )
 
-// TestContainerNetworkCommunication 测试容器间网络通信
-func TestContainerNetworkCommunication(t *testing.T) {
+// TestNetworkConnectivity 测试容器间网络通信
+func TestNetworkConnectivity(t *testing.T) {
 	if testing.Short() {
 		t.Skip("跳过集成测试")
 	}

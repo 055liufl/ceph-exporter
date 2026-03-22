@@ -1,8 +1,8 @@
 # Docker 镜像加速配置指南
 
-**适用环境**: CentOS 7 + Docker
+**适用环境**: Ubuntu 20.04 + Docker
 
-本文档介绍如何在 CentOS 7 环境下配置 Docker 镜像加速器，提高镜像拉取速度。
+本文档介绍如何在 Ubuntu 20.04 环境下配置 Docker 镜像加速器，提高镜像拉取速度。
 
 ---
 
@@ -99,12 +99,12 @@ time docker pull alpine:latest
 
 ```bash
 # 拉取 Ceph Demo 镜像
-docker pull ceph/demo:latest-nautilus
+docker pull quay.io/ceph/daemon:latest-octopus
 
-# 拉取监控组件镜像
-docker pull prom/prometheus:latest
-docker pull grafana/grafana:latest
-docker pull prom/alertmanager:latest
+# 拉取监控组件镜像（使用项目指定版本）
+docker pull prom/prometheus:v2.51.0
+docker pull grafana/grafana:10.4.0
+docker pull prom/alertmanager:v0.27.0
 
 # 拉取 ELK 镜像
 docker pull docker.elastic.co/elasticsearch/elasticsearch:7.17.0
@@ -201,8 +201,7 @@ sudo systemctl restart docker
 
 ## 🔗 相关文档
 
-- [完整部署指南](./DEPLOYMENT_GUIDE.md)
-- [快速开始](./QUICK_START.md)
+- [完整操作指南](./Ceph-Exporter项目完整操作指南.md)
 
 ---
 

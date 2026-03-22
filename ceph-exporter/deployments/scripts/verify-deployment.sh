@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# CentOS 7 部署验证脚本
+# Ubuntu 20.04 部署验证脚本
 # =============================================================================
 # 验证所有服务是否正常运行并可访问
 # =============================================================================
@@ -84,18 +84,14 @@ check_chinese_config() {
             continue
         fi
 
-        # 检查 Grafana 中文配置
+        # 检查 Grafana 中文配置（可选配置，仅在存在时报告）
         if grep -q "GF_DEFAULT_LOCALE=zh-CN" "$file"; then
             print_success "$desc: Grafana 中文语言配置正确"
-        else
-            print_warning "$desc: Grafana 缺少中文语言配置"
         fi
 
-        # 检查 Prometheus 中文配置文件引用
+        # 检查 Prometheus 中文配置文件引用（可选配置，仅在存在时报告）
         if grep -q "prometheus.zh-CN.yml" "$file"; then
             print_success "$desc: Prometheus 使用中文配置文件"
-        else
-            print_warning "$desc: Prometheus 可能未使用中文配置文件"
         fi
     done
 
@@ -359,7 +355,7 @@ generate_report() {
         echo "=========================================="
         echo "验证时间: $(date '+%Y-%m-%d %H:%M:%S')"
         echo "主机名: $(hostname)"
-        echo "操作系统: $(cat /etc/centos-release 2>/dev/null || echo 'Unknown')"
+        echo "操作系统: $(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"' || echo 'Unknown')"
         echo ""
         echo "=========================================="
         echo "容器状态"

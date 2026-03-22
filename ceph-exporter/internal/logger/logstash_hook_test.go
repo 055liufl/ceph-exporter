@@ -1,6 +1,18 @@
 // =============================================================================
 // Logstash Hook 单元测试
 // =============================================================================
+// 测试 Logstash Hook 的功能，包括:
+//   - Hook 创建（有效/无效的协议和地址）
+//   - 日志发送（通过模拟 TCP 服务器验证）
+//   - 日志级别过滤（应监听所有级别）
+//   - 关闭和资源释放（包括幂等性测试）
+//
+// 测试方法:
+//
+//	使用 net.Listen 创建本地 TCP 服务器模拟 Logstash，
+//	验证 Hook 能正确建立连接并发送 JSON 格式的日志数据。
+//
+// =============================================================================
 package logger
 
 import (
@@ -12,6 +24,10 @@ import (
 )
 
 // TestNewLogstashHook 测试创建 Logstash Hook
+// 使用 table-driven tests 测试多种场景:
+//   - valid tcp: 使用有效的 TCP 地址创建 Hook（应成功）
+//   - invalid protocol: 使用不支持的协议（http）创建 Hook（应失败）
+//   - invalid address: 使用无效的地址创建 Hook（应失败）
 func TestNewLogstashHook(t *testing.T) {
 	// 启动一个模拟的 TCP 服务器用于测试
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -65,7 +81,13 @@ func TestNewLogstashHook(t *testing.T) {
 	}
 }
 
-// TestLogstashHook_Fire 测试日志发送
+// TestLogstashHook_Fire 测试日志发送功能
+// 流程:
+//  1. 启动模拟 TCP 服务器
+//  2. 创建 Hook 并连接到模拟服务器
+//  3. 构造带有 component 和 trace_id 字段的日志条目
+//  4. 调用 Fire 发送日志
+//  5. 验证模拟服务器收到了日志数据
 func TestLogstashHook_Fire(t *testing.T) {
 	// 启动一个模拟的 TCP 服务器
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -131,7 +153,8 @@ func TestLogstashHook_Fire(t *testing.T) {
 	}
 }
 
-// TestLogstashHook_Levels 测试日志级别
+// TestLogstashHook_Levels 测试 Hook 监听的日志级别
+// 验证 Hook 监听所有日志级别（从 Panic 到 Trace）
 func TestLogstashHook_Levels(t *testing.T) {
 	hook := &LogstashHook{}
 	levels := hook.Levels()
@@ -141,7 +164,11 @@ func TestLogstashHook_Levels(t *testing.T) {
 	}
 }
 
-// TestLogstashHook_Close 测试关闭
+// TestLogstashHook_Close 测试关闭 Hook
+// 验证:
+//   - 正常关闭不报错
+//   - 重复关闭不报错（幂等性）
+//   - 关闭后 sender goroutine 正确退出
 func TestLogstashHook_Close(t *testing.T) {
 	hook := &LogstashHook{
 		buffer: make(chan []byte, 10),

@@ -7,14 +7,31 @@
 #
 # 主要功能：
 #   1. 环境检查：检查操作系统、Docker、Docker Compose、系统资源
-#   2. 环境配置：配置 Docker 镜像加速、防火墙、SELinux
+#   2. 环境配置：配置 Docker 镜像加速、防火墙
 #   3. 镜像管理：预拉取所需的 Docker 镜像
 #   4. 服务部署：支持三种部署模式（最小栈、集成测试、完整栈）
-#   5. 服务管理：查看状态、日志、验证部署、停止服务
-#   6. 数据管理：清理数据卷
+#   5. 服务管理：查看状态、日志、验证部署、诊断问题、停止服务
+#   6. 数据管理：初始化数据目录、清理数据
 #
-# 适用环境：CentOS 7 + Docker
+# 适用环境：Ubuntu 20.04 + Docker
 # 依赖工具：bash, docker, docker-compose, curl
+#
+# 使用方式：
+#   ./deploy.sh check           # 检查系统环境
+#   ./deploy.sh minimal         # 部署最小监控栈（需要现有 Ceph 集群）
+#   ./deploy.sh integration     # 部署集成测试环境（包含 Ceph Demo）
+#   ./deploy.sh full            # 部署完整轻量级栈（推荐，包含 ELK + Jaeger）
+#   ./deploy.sh status          # 查看服务状态
+#   ./deploy.sh verify          # 验证部署状态
+#   ./deploy.sh diagnose        # 诊断服务问题
+#   ./deploy.sh fix             # 修复常见部署问题
+#   ./deploy.sh stop            # 停止所有服务
+#   ./deploy.sh clean           # 停止服务并清除数据
+#   ./deploy.sh help            # 显示帮助信息
+#
+# 环境变量：
+#   LOGGING_MODE=container      # 指定日志方案（跳过交互选择）
+#     可选值: container, direct, direct-udp, file, dev
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -46,11 +63,12 @@ PROJECT_DIR="$(dirname "$DEPLOY_DIR")"
 # 终端颜色定义（用于美化输出）
 # -----------------------------------------------------------------------------
 # ANSI 转义序列，用于在终端中显示彩色文本
-RED='\033[0;31m'      # 红色 - 用于错误信息
-GREEN='\033[0;32m'    # 绿色 - 用于成功信息
-YELLOW='\033[1;33m'   # 黄色 - 用于警告信息
-BLUE='\033[0;34m'     # 蓝色 - 用于步骤提示
-NC='\033[0m'          # 无颜色 - 重置颜色
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 # -----------------------------------------------------------------------------
 # 日志输出函数
@@ -60,28 +78,41 @@ NC='\033[0m'          # 无颜色 - 重置颜色
 # 用途：显示正常的操作信息和成功消息
 # 参数：$1 - 要显示的消息内容
 log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    echo -e "${GREEN}[信息]${NC} $1"
 }
 
 # 输出警告日志（黄色）
 # 用途：显示警告信息，不会中断执行
 # 参数：$1 - 警告消息内容
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${YELLOW}[警告]${NC} $1"
 }
 
 # 输出错误日志（红色）
 # 用途：显示错误信息，通常后续会退出脚本
 # 参数：$1 - 错误消息内容
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[错误]${NC} $1"
 }
 
 # 输出步骤提示（蓝色）
 # 用途：标识主要操作步骤，便于追踪执行流程
 # 参数：$1 - 步骤描述
 log_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
+    echo -e "${BLUE}[步骤]${NC} $1"
+}
+
+# -----------------------------------------------------------------------------
+# 横幅打印函数
+# -----------------------------------------------------------------------------
+# 打印项目横幅
+# 说明：在脚本启动时显示项目名称和分隔线
+print_banner() {
+    echo -e "${GREEN}"
+    echo "=============================================="
+    echo "  Ceph Exporter 中文监控系统"
+    echo "=============================================="
+    echo -e "${NC}"
 }
 
 # -----------------------------------------------------------------------------
@@ -97,34 +128,29 @@ check_root() {
     if [ "$EUID" -eq 0 ]; then
         log_warn "检测到以 root 用户运行"
         log_warn "建议使用普通用户并将其添加到 docker 组"
-        log_warn "命令: sudo usermod -aG docker \$USER"
     fi
 }
 
 # 检查操作系统版本
 # 说明：
-#   - 此脚本针对 CentOS 7 优化
+#   - 此脚本针对 Ubuntu 20.04 优化
 #   - 其他版本可能需要调整某些命令
-#   - 检查 /etc/centos-release 文件判断系统版本
+#   - 通过 /etc/os-release 文件判断系统版本
 check_os() {
     log_step "检查操作系统..."
 
-    # 检查是否为 CentOS 系统
-    if [ -f /etc/centos-release ]; then
-        # 使用 grep -oP 提取版本号
-        # (?<=release ) 是正向后查找，匹配 "release " 后面的数字
-        # \d+ 匹配一个或多个数字
-        local version=$(cat /etc/centos-release | grep -oP '(?<=release )\d+')
-        log_info "检测到 CentOS $version"
-
-        # 检查是否为 CentOS 7
-        if [ "$version" != "7" ]; then
-            log_warn "此脚本针对 CentOS 7 优化，当前版本: $version"
-            log_warn "某些功能可能需要调整"
+    # 检查 /etc/os-release 文件是否存在
+    if [ -f /etc/os-release ]; then
+        # 加载系统版本信息（设置 ID、VERSION_ID、PRETTY_NAME 等变量）
+        source /etc/os-release
+        log_info "检测到 $PRETTY_NAME"
+        # 检查是否为 Ubuntu 20.04
+        # [[ ]] 支持模式匹配和正则表达式
+        if [[ "$ID" != "ubuntu" ]] || [[ "$VERSION_ID" != "20.04" ]]; then
+            log_warn "此脚本针对 Ubuntu 20.04 优化，当前系统: $PRETTY_NAME"
         fi
     else
-        log_warn "未检测到 CentOS 系统"
-        log_warn "脚本可能无法正常工作"
+        log_warn "未检测到系统版本信息"
     fi
 }
 
@@ -133,7 +159,7 @@ check_os() {
 #   - 检查 docker 命令是否可用
 #   - 检查 Docker 版本
 #   - 检查 Docker 服务是否运行
-#   - 如果未安装，提供安装命令
+#   - 如果未安装，提供 Ubuntu 的安装命令
 check_docker() {
     log_step "检查 Docker 安装..."
 
@@ -141,23 +167,12 @@ check_docker() {
     # &> /dev/null: 重定向所有输出到 /dev/null（丢弃）
     if ! command -v docker &> /dev/null; then
         log_error "Docker 未安装"
-        log_info "请运行以下命令安装 Docker:"
-        echo ""
-        echo "  # 安装依赖工具"
-        echo "  sudo yum install -y yum-utils"
-        echo ""
-        echo "  # 添加 Docker 仓库（使用阿里云镜像）"
-        echo "  sudo yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo"
-        echo ""
-        echo "  # 安装 Docker CE（社区版）"
-        echo "  sudo yum install -y docker-ce docker-ce-cli containerd.io"
-        echo ""
-        echo "  # 启动 Docker 服务"
-        echo "  sudo systemctl start docker"
-        echo ""
-        echo "  # 设置开机自启"
-        echo "  sudo systemctl enable docker"
-        echo ""
+        log_info "请执行以下命令安装 Docker:"
+        echo "  sudo apt-get update"
+        echo "  sudo apt-get install -y ca-certificates curl gnupg"
+        echo "  sudo install -m 0755 -d /etc/apt/keyrings"
+        echo "  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+        echo "  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
         exit 1
     fi
 
@@ -175,51 +190,27 @@ check_docker() {
         log_warn "Docker 服务未运行"
         log_info "启动 Docker 服务..."
         sudo systemctl start docker
-
-        # 等待服务启动
-        sleep 2
-
-        # 再次检查
-        if ! sudo systemctl is-active --quiet docker; then
-            log_error "Docker 服务启动失败"
-            exit 1
-        fi
     fi
-
-    log_info "Docker 服务运行正常"
 }
 
 # 检查 Docker Compose 安装
 # 说明：
-#   - 支持两种版本：docker-compose（v1）和 docker compose（v2）
-#   - 优先使用 v2（docker compose）
+#   - 支持两种版本：docker compose（v2 插件，优先）和 docker-compose（v1）
 #   - 设置全局变量 COMPOSE_CMD 供后续使用
 check_docker_compose() {
     log_step "检查 Docker Compose 安装..."
 
-    # 检查 docker-compose 命令（v1 版本）
-    if command -v docker-compose &> /dev/null; then
-        COMPOSE_CMD="docker-compose"
-        local compose_version=$(docker-compose --version | grep -oP '\d+\.\d+\.\d+' | head -1)
-        log_info "Docker Compose 版本: $compose_version (v1)"
-    # 检查 docker compose 命令（v2 版本）
-    elif docker compose version &> /dev/null; then
+    # 优先检查 docker compose 命令（v2 插件版本）
+    if docker compose version &> /dev/null; then
         COMPOSE_CMD="docker compose"
-        local compose_version=$(docker compose version | grep -oP '\d+\.\d+\.\d+' | head -1)
-        log_info "Docker Compose 版本: $compose_version (v2)"
+        log_info "Docker Compose 插件已安装: $(docker compose version)"
+    # 检查 docker-compose 命令（v1 版本）
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
+        log_warn "检测到旧版 docker-compose，建议升级到 Docker Compose 插件"
     else
         log_error "Docker Compose 未安装"
-        log_info "请运行以下命令安装 Docker Compose:"
-        echo ""
-        echo "  # 下载 Docker Compose（使用国内镜像）"
-        echo "  sudo curl -L \"https://get.daocloud.io/docker/compose/releases/download/v2.24.0/docker-compose-\$(uname -s)-\$(uname -m)\" -o /usr/local/bin/docker-compose"
-        echo ""
-        echo "  # 添加执行权限"
-        echo "  sudo chmod +x /usr/local/bin/docker-compose"
-        echo ""
-        echo "  # 创建软链接（兼容 v1 命令）"
-        echo "  sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose"
-        echo ""
+        log_info "请执行: sudo apt-get install -y docker-compose-plugin"
         exit 1
     fi
 }
@@ -247,7 +238,6 @@ check_resources() {
     # 最小部署需要约 1GB，集成测试需要 2-3GB，完整栈需要 4-6GB
     if [ "$avail_mem" -lt 2048 ]; then
         log_warn "可用内存不足 2GB，可能影响服务运行"
-        log_warn "建议: 使用 minimal 模式部署或增加内存"
     fi
 
     # 检查 CPU 核心数
@@ -257,7 +247,6 @@ check_resources() {
 
     if [ "$cpu_cores" -lt 2 ]; then
         log_warn "CPU 核心数少于 2，建议增加"
-        log_warn "单核 CPU 可能导致服务响应缓慢"
     fi
 
     # 检查磁盘空间
@@ -269,135 +258,54 @@ check_resources() {
 
     if [ "$disk_avail" -lt 20 ]; then
         log_warn "可用磁盘空间不足 20GB"
-        log_warn "Docker 镜像和数据卷可能占用大量空间"
     fi
 }
 
 # 检查防火墙状态
 # 说明：
-#   - 检查 firewalld 服务是否运行
-#   - 如果运行，提示需要开放的端口
-#   - 可选择自动配置防火墙规则
+#   - 检查 UFW 防火墙是否安装
+#   - 如果安装，自动配置端口规则
+#   - 开放所有监控服务所需的端口
 check_firewall() {
     log_step "检查防火墙状态..."
-
-    # 检查 firewalld 服务是否活动
-    if sudo systemctl is-active --quiet firewalld; then
-        log_warn "防火墙已启用"
-        log_info "需要开放以下端口:"
-        echo "  - 9128: ceph-exporter 指标端口"
-        echo "  - 9090: Prometheus Web UI"
-        echo "  - 3000: Grafana Web UI"
-        echo "  - 9093: Alertmanager Web UI"
-        echo "  - 9200: Elasticsearch API"
-        echo "  - 5601: Kibana Web UI"
-        echo "  - 16686: Jaeger UI"
-        echo "  - 8080: Ceph Dashboard"
-        echo ""
-
-        # 询问是否自动配置
-        read -p "是否自动配置防火墙规则? (y/N): " configure_fw
-        if [[ "$configure_fw" == "y" || "$configure_fw" == "Y" ]]; then
-            configure_firewall
-        else
-            log_info "请手动配置防火墙或临时关闭:"
-            echo "  sudo systemctl stop firewalld"
-        fi
-    else
-        log_info "防火墙未启用"
-    fi
-}
-
-# 配置防火墙规则
-# 说明：
-#   - 开放所有必需的端口
-#   - 使用 --permanent 使规则永久生效
-#   - 重新加载防火墙使规则立即生效
-configure_firewall() {
-    log_step "配置防火墙规则..."
 
     # 定义需要开放的端口列表
     local ports=(9128 9090 3000 9093 9200 5601 16686 8080)
 
-    # 遍历端口列表，逐个开放
-    for port in "${ports[@]}"; do
-        # firewall-cmd --permanent: 永久添加规则
-        # --add-port=${port}/tcp: 开放 TCP 端口
-        sudo firewall-cmd --permanent --add-port=${port}/tcp
-        log_info "已开放端口: $port"
-    done
-
-    # 重新加载防火墙配置
-    sudo firewall-cmd --reload
-    log_info "防火墙规则已重新加载"
+    # 检查 UFW 防火墙是否可用
+    if command -v ufw &> /dev/null; then
+        log_info "配置 UFW 防火墙规则..."
+        # 遍历端口列表，逐个开放
+        for port in "${ports[@]}"; do
+            # ufw allow: 允许指定端口的 TCP 流量
+            # comment: 添加注释标识规则来源
+            # 2>/dev/null || true: 忽略错误（如 ufw 未激活时）
+            sudo ufw allow "$port"/tcp comment "ceph-exporter" 2>/dev/null || true
+        done
+        log_info "防火墙规则配置完成"
+    else
+        log_info "未检测到 UFW，跳过防火墙配置"
+    fi
 }
 
 # 检查 SELinux 状态
 # 说明：
-#   - SELinux 可能阻止 Docker 容器访问某些资源
-#   - 检查当前状态（Enforcing/Permissive/Disabled）
-#   - 提供临时禁用选项
+#   - Ubuntu 20.04 使用 AppArmor 而非 SELinux
+#   - 无需额外的 SELinux 配置
 check_selinux() {
-    log_step "检查 SELinux 状态..."
-
-    # getenforce: 获取 SELinux 当前模式
-    # 2>/dev/null: 忽略错误输出（某些系统可能没有 SELinux）
-    # || echo "Disabled": 如果命令失败，输出 Disabled
-    local selinux_status=$(getenforce 2>/dev/null || echo "Disabled")
-    log_info "SELinux 状态: $selinux_status"
-
-    # 如果处于强制模式
-    if [ "$selinux_status" == "Enforcing" ]; then
-        log_warn "SELinux 处于强制模式，可能影响 Docker 容器运行"
-        log_warn "常见问题: 容器无法访问挂载的卷"
-        echo ""
-
-        # 询问是否临时禁用
-        read -p "是否临时禁用 SELinux? (y/N): " disable_selinux
-        if [[ "$disable_selinux" == "y" || "$disable_selinux" == "Y" ]]; then
-            # setenforce 0: 设置为 Permissive 模式（临时）
-            sudo setenforce 0
-            log_info "SELinux 已临时禁用（Permissive 模式）"
-            log_warn "重启后将恢复为 Enforcing 模式"
-            log_info "永久禁用: 编辑 /etc/selinux/config，设置 SELINUX=disabled"
-        fi
-    fi
+    # Ubuntu 20.04 使用 AppArmor，无需 SELinux 配置
+    log_info "跳过 SELinux 检查 (Ubuntu 使用 AppArmor)"
 }
+
+# -----------------------------------------------------------------------------
+# Docker 镜像加速配置
+# -----------------------------------------------------------------------------
 
 # 配置 Docker 镜像加速器
 # 说明：
 #   - 国内访问 Docker Hub 速度慢，需要配置镜像加速
-#   - 配置多个镜像源，提高可用性
-#   - 同时配置日志和存储驱动
-check_docker_compose() {
-    log_step "检查 Docker Compose 安装..."
-
-    if command -v docker-compose &> /dev/null; then
-        COMPOSE_CMD="docker-compose"
-        local compose_version=$(docker-compose --version | grep -oP '\d+\.\d+\.\d+' | head -1)
-        log_info "Docker Compose 版本: $compose_version"
-    elif docker compose version &> /dev/null; then
-        COMPOSE_CMD="docker compose"
-        local compose_version=$(docker compose version | grep -oP '\d+\.\d+\\.\\d+' | head -1)
-        log_info "Docker Compose 版本: $compose_version (v2)"
-    else
-        log_error "Docker Compose 未安装"
-        log_info "请运行以下命令安装 Docker Compose:"
-        echo ""
-        echo "  sudo curl -L \"https://get.daocloud.io/docker/compose/releases/download/v2.24.0/docker-compose-\$(uname -s)-\$(uname -m)\" -o /usr/local/bin/docker-compose"
-        echo "  sudo chmod +x /usr/local/bin/docker-compose"
-        echo "  sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose"
-        echo ""
-        exit 1
-    fi
-}
-
-
-# 配置 Docker 镜像加速器
-# 说明：
-#   - 国内访问 Docker Hub 速度慢，需要配置镜像加速
-#   - 配置多个镜像源，提高可用性
-#   - 同时配置日志和存储驱动
+#   - 配置多个镜像源（中科大、网易、腾讯云），提高可用性
+#   - 同时配置日志驱动（json-file）和存储驱动（overlay2）
 configure_mirror() {
     log_step "配置 Docker 镜像加速器..."
 
@@ -406,6 +314,7 @@ configure_mirror() {
         log_info "检测到现有 Docker 配置"
 
         # 检查是否已配置镜像加速
+        # grep -q: 静默搜索，只返回状态码
         if grep -q "registry-mirrors" /etc/docker/daemon.json; then
             log_info "镜像加速器已配置"
             return
@@ -446,6 +355,10 @@ EOF
     log_info "镜像加速器配置完成"
 }
 
+# -----------------------------------------------------------------------------
+# 镜像预拉取函数
+# -----------------------------------------------------------------------------
+
 # 预拉取所需的 Docker 镜像
 # 说明：
 #   - 提前拉取镜像可以加快部署速度
@@ -455,21 +368,23 @@ pull_images() {
     log_step "预拉取所需镜像..."
 
     # 定义所有需要的镜像列表
+    # 包含：Ceph Demo、Prometheus、Grafana、Alertmanager、
+    #       Elasticsearch、Logstash、Kibana、Filebeat、Jaeger
     local images=(
-        "ceph/demo:latest-nautilus"                                    # Ceph Demo 集群
-        "prom/prometheus:latest"                                       # Prometheus 监控
-        "grafana/grafana:latest"                                       # Grafana 可视化
-        "prom/alertmanager:latest"                                     # Alertmanager 告警
-        "docker.elastic.co/elasticsearch/elasticsearch:7.17.0"         # Elasticsearch 日志存储
-        "docker.elastic.co/logstash/logstash:7.17.0"                   # Logstash 日志处理
-        "docker.elastic.co/kibana/kibana:7.17.0"                       # Kibana 日志可视化
-        "jaegertracing/all-in-one:1.35"                                # Jaeger 分布式追踪
+        "quay.io/ceph/daemon:latest-octopus"
+        "prom/prometheus:v2.51.0"
+        "grafana/grafana:10.4.0"
+        "prom/alertmanager:v0.27.0"
+        "docker.elastic.co/elasticsearch/elasticsearch:7.17.0"
+        "docker.elastic.co/logstash/logstash:7.17.0"
+        "docker.elastic.co/kibana/kibana:7.17.0"
+        "docker.elastic.co/beats/filebeat:7.17.0"
+        "jaegertracing/all-in-one:1.35"
     )
 
     # 遍历镜像列表，逐个拉取
     for image in "${images[@]}"; do
         log_info "拉取镜像: $image"
-
         # 拉取镜像，检查是否有错误
         # 2>&1: 将标准错误重定向到标准输出
         # grep -q: 静默搜索，只返回状态码
@@ -482,25 +397,86 @@ pull_images() {
 }
 
 # -----------------------------------------------------------------------------
+# 数据目录初始化函数
+# -----------------------------------------------------------------------------
+
+# 初始化数据目录
+# 说明：
+#   - 创建所有服务所需的数据目录结构
+#   - 设置正确的目录权限（不同服务需要不同的 UID）
+#   - 创建 configs 目录软链接
+#   - Grafana 需要 UID 472，Elasticsearch 需要 UID 1000，Prometheus 需要 UID 65534
+init_data_dirs() {
+    log_step "初始化数据目录..."
+
+    cd "$DEPLOY_DIR"
+
+    # 创建数据目录结构
+    # mkdir -p: 递归创建目录（不存在则创建，已存在不报错）
+    log_info "创建数据目录结构..."
+    mkdir -p data/{ceph-demo/{data,config},prometheus,grafana,alertmanager,elasticsearch}
+    mkdir -p data/test/{ceph-demo/{data,config},prometheus,grafana}
+
+    # 设置权限
+    log_info "设置目录权限..."
+
+    # Grafana 需要 472 用户权限
+    # 说明：Grafana 容器内使用 UID 472 的 grafana 用户运行
+    if command -v sudo &> /dev/null; then
+        sudo chown -R 472:472 data/grafana data/test/grafana 2>/dev/null || {
+            log_warn "无法设置 Grafana 目录权限，可能需要手动设置"
+        }
+
+        # Elasticsearch 需要 1000 用户权限
+        # 说明：Elasticsearch 容器内使用 UID 1000 的 elasticsearch 用户运行
+        sudo chown -R 1000:1000 data/elasticsearch 2>/dev/null || {
+            log_warn "无法设置 Elasticsearch 目录权限，可能需要手动设置"
+        }
+
+        # Prometheus 需要 nobody 用户权限 (UID 65534)
+        # 说明：Prometheus 容器内使用 nobody 用户运行以增强安全性
+        sudo chown -R 65534:65534 data/prometheus data/test/prometheus 2>/dev/null || {
+            log_warn "无法设置 Prometheus 目录权限，可能需要手动设置"
+        }
+
+        # Alertmanager 使用当前用户权限
+        sudo chown -R $USER:$USER data/alertmanager 2>/dev/null || true
+    else
+        log_warn "未检测到 sudo，跳过权限设置"
+    fi
+
+    # 创建 configs 目录软链接（如果不存在）
+    # 说明：将上级目录的 configs 链接到部署目录，方便容器挂载配置
+    if [ ! -e configs ]; then
+        log_info "创建 configs 目录软链接..."
+        ln -s ../configs configs 2>/dev/null || {
+            log_warn "无法创建 configs 软链接，请确保 ../configs 目录存在"
+        }
+    fi
+
+    log_info "数据目录初始化完成"
+    log_info "数据存储位置: $DEPLOY_DIR/data/"
+    log_info "时区配置: 所有容器已自动挂载宿主机时区 (/etc/localtime, /etc/timezone)"
+}
+
+# -----------------------------------------------------------------------------
 # 部署函数
 # -----------------------------------------------------------------------------
 
 # 部署最小监控栈
 # 说明：
-#   - 只包含核心监控组件
-#   - 适用于生产环境（连接真实 Ceph 集群）
+#   - 只包含核心监控组件（ceph-exporter + Prometheus + Grafana + Alertmanager）
+#   - 适用于生产环境（需要连接现有 Ceph 集群）
 #   - 资源需求：1GB 内存，1-2 CPU
 deploy_minimal() {
     log_step "部署最小监控栈..."
 
     # 初始化数据目录
-    # 说明：创建必要的数据目录并设置正确的权限
     init_data_dirs
 
     # 切换到部署目录
     cd "$DEPLOY_DIR"
-
-    # 使用 docker-compose 启动服务
+    # 使用 docker compose 启动服务
     # -f: 指定配置文件
     # up: 创建并启动容器
     # -d: 后台运行（detached mode）
@@ -517,67 +493,50 @@ deploy_minimal() {
 # 部署集成测试环境
 # 说明：
 #   - 包含 Ceph Demo + 监控组件
-#   - 适用于开发和测试
+#   - 适用于开发和测试（无需现有 Ceph 集群）
 #   - 资源需求：2-3GB 内存，2 CPU
 deploy_integration() {
     log_step "部署集成测试环境..."
 
     # 初始化数据目录
-    # 说明：创建必要的数据目录并设置正确的权限
     init_data_dirs
 
     cd "$DEPLOY_DIR"
     ${COMPOSE_CMD} -f docker-compose-integration-test.yml up -d
 
-    log_info "等待服务启动（Ceph Demo 需要约 90 秒初始化）..."
-    # Ceph Demo 需要更长时间初始化
+    log_info "等待服务启动..."
+    # Ceph Demo 需要较长时间初始化（约 90 秒）
     sleep 90
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # 修复 Ceph keyring 文件权限
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # 问题说明：
     #   - Ceph Demo 容器创建的 keyring 文件默认权限为 600（-rw-------）
-    #   - 这意味着只有文件所有者（UID 167，ceph-demo 容器用户）可以读写
-    #   - ceph-exporter 容器以不同的用户运行，无法读取这些文件
+    #   - ceph-exporter 容器以不同用户运行，无法读取这些文件
     #   - 导致错误：rados: ret=-13, Permission denied
-    #
     # 解决方案：
     #   - 将 keyring 文件权限修改为 644（-rw-r--r--）
-    #   - 644 权限：所有者可读写，组和其他人可读
-    #   - 这允许 ceph-exporter 容器读取 keyring 文件连接到 Ceph 集群
-    #
-    # 安全性说明：
-    #   - 在 Docker 容器环境中，这是安全的做法
-    #   - 容器之间通过 Docker 网络隔离
-    #   - keyring 文件仍然在宿主机的受保护目录中
-    #   - 只有有权访问 Docker 的用户才能读取这些文件
+    #   - 允许 ceph-exporter 容器读取 keyring 文件连接到 Ceph 集群
     log_info "修复 Ceph keyring 文件权限..."
-
     # 修复 admin keyring（管理员密钥）
     if [ -f "data/ceph-demo/config/ceph.client.admin.keyring" ]; then
         chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
-        log_info "✓ ceph.client.admin.keyring 权限已修复 (644)"
+        log_info "✓ ceph.client.admin.keyring 权限已修复"
     fi
-
     # 修复 mon keyring（Monitor 密钥）
     if [ -f "data/ceph-demo/config/ceph.mon.keyring" ]; then
         chmod 644 data/ceph-demo/config/ceph.mon.keyring
-        log_info "✓ ceph.mon.keyring 权限已修复 (644)"
+        log_info "✓ ceph.mon.keyring 权限已修复"
     fi
 
     # 重启 ceph-exporter 以应用权限修复
-    # 说明：
-    #   - 权限修复后需要重启 ceph-exporter 才能生效
-    #   - 使用 restart 而不是 stop/start 可以保持容器配置
-    #   - restart 会优雅地停止容器并重新启动
+    # 说明：权限修复后需要重启 ceph-exporter 才能读取 keyring
     log_info "重启 ceph-exporter 服务..."
     ${COMPOSE_CMD} -f docker-compose-integration-test.yml restart ceph-exporter
 
     # 等待 ceph-exporter 重启完成
-    # 说明：
-    #   - ceph-exporter 需要几秒钟连接到 Ceph 集群
-    #   - 等待 10 秒确保服务完全启动
+    # 说明：ceph-exporter 需要几秒钟连接到 Ceph 集群
     log_info "等待 ceph-exporter 启动..."
     sleep 10
 
@@ -586,94 +545,238 @@ deploy_integration() {
 
 # 部署完整轻量级监控栈
 # 说明：
-#   - 包含 Ceph Demo + 监控 + 日志 + 追踪
+#   - 包含 Ceph Demo + 监控 + 日志(ELK) + 追踪(Jaeger)
+#   - 支持多种日志收集方案（容器/直接/文件/开发模式）
 #   - 适用于演示和功能测试
 #   - 资源需求：4-6GB 内存，2-4 CPU
 deploy_full() {
     log_step "部署完整轻量级监控栈..."
 
     # 初始化数据目录
-    # 说明：创建必要的数据目录并设置正确的权限
     init_data_dirs
 
+    # 设置系统参数（Elasticsearch 需要）
+    # vm.max_map_count: 控制进程可拥有的内存映射区域最大数量
+    # Elasticsearch 默认需要至少 262144
+    log_info "设置系统参数..."
+    sudo sysctl -w vm.max_map_count=262144 2>/dev/null || log_warn "无法设置 vm.max_map_count，可能需要 root 权限"
+
+    # 修复数据目录权限（在启动前）
+    # 说明：确保各服务的数据目录有正确的所有者
+    log_info "修复数据目录权限..."
+    [ -d "data/elasticsearch" ] && sudo chown -R 1000:1000 data/elasticsearch 2>/dev/null || true
+    [ -d "data/prometheus" ] && sudo chown -R 65534:65534 data/prometheus 2>/dev/null || true
+    [ -d "data/grafana" ] && sudo chown -R 472:472 data/grafana 2>/dev/null || true
+    [ -d "data/ceph-demo/config" ] && sudo chmod -R 755 data/ceph-demo/config 2>/dev/null || true
+
     cd "$DEPLOY_DIR"
-    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d
 
-    log_info "等待所有服务启动（这可能需要几分钟）..."
-    # 完整栈包含更多服务，需要更长启动时间
-    sleep 120
+    # 选择日志方案
+    # 说明：支持通过环境变量 LOGGING_MODE 预设，或交互式选择
+    local logging_mode="${LOGGING_MODE:-}"
+    if [ -z "$logging_mode" ]; then
+        echo ""
+        echo -e "${YELLOW}请选择日志收集方案:${NC}"
+        echo "  1) container  - 容器日志收集（推荐，通过 Filebeat sidecar 采集）"
+        echo "  2) direct     - 直接推送到 Logstash (TCP，无需 Filebeat)"
+        echo "  3) direct-udp - 直接推送到 Logstash (UDP，高性能)"
+        echo "  4) file       - 文件日志 + Filebeat（日志持久化）"
+        echo "  5) dev        - 开发模式（stdout + text，方便调试）"
+        echo ""
+        read -p "请输入选项 [1]: " logging_choice
+        # 根据用户选择设置日志方案
+        case "${logging_choice:-1}" in
+            1|container)
+                logging_mode="container"
+                ;;
+            2|direct)
+                logging_mode="direct"
+                ;;
+            3|direct-udp)
+                logging_mode="direct-udp"
+                ;;
+            4|file)
+                logging_mode="file"
+                ;;
+            5|dev)
+                logging_mode="dev"
+                ;;
+            *)
+                # 默认使用容器日志收集方案
+                logging_mode="container"
+                ;;
+        esac
+    fi
 
-    # 修复 Ceph keyring 文件权限（同上）
+    # 应用日志方案配置
+    # 说明：调用 switch-logging-mode.sh 脚本切换日志配置
+    log_info "应用日志方案: $logging_mode"
+    "$SCRIPT_DIR/switch-logging-mode.sh" "$logging_mode"
+
+    # 启动核心服务（不包含 filebeat-sidecar）
+    # 说明：先启动核心服务，根据日志方案决定是否需要 filebeat-sidecar
+    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d \
+        ceph-demo ceph-exporter prometheus grafana alertmanager \
+        elasticsearch logstash kibana jaeger
+
+    log_info "等待 Elasticsearch 启动..."
+    sleep 30
+
+    log_info "等待 ceph-demo 生成配置..."
+    sleep 30
+
+    # 修复 Ceph keyring 文件权限
+    # 说明：同 deploy_integration 中的说明
     log_info "修复 Ceph keyring 文件权限..."
     if [ -f "data/ceph-demo/config/ceph.client.admin.keyring" ]; then
         chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
-        log_info "✓ ceph.client.admin.keyring 权限已修复 (644)"
+        log_info "✓ ceph.client.admin.keyring 权限已修复"
     fi
     if [ -f "data/ceph-demo/config/ceph.mon.keyring" ]; then
         chmod 644 data/ceph-demo/config/ceph.mon.keyring
-        log_info "✓ ceph.mon.keyring 权限已修复 (644)"
+        log_info "✓ ceph.mon.keyring 权限已修复"
     fi
 
-    # 重启 ceph-exporter 以应用权限修复
+    # 重启 ceph-exporter 以应用权限修复和网络配置
     log_info "重启 ceph-exporter 服务..."
-    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml restart ceph-exporter
+    ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d ceph-exporter
 
-    # 等待 ceph-exporter 重启完成
-    log_info "等待 ceph-exporter 启动..."
+    # 根据日志方案决定是否启动 filebeat-sidecar
+    # 说明：只有 container 方案需要 Filebeat sidecar 采集容器日志
+    if [ "$logging_mode" = "container" ]; then
+        log_info "启动 Filebeat sidecar（容器日志收集模式）..."
+        ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
+    else
+        log_info "当前日志方案: $logging_mode，不需要 Filebeat sidecar"
+        # 确保 filebeat-sidecar 未运行
+        ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml stop filebeat-sidecar 2>/dev/null || true
+        ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml rm -f filebeat-sidecar 2>/dev/null || true
+    fi
+
+    log_info "等待所有服务就绪..."
+    sleep 20
+
+    # 生成测试数据
+    # 说明：多次请求 ceph-exporter 的 /metrics 端点，生成初始指标数据
+    log_info "生成测试数据..."
+    for i in {1..10}; do
+        curl -s http://localhost:9128/metrics > /dev/null 2>&1 || true
+        sleep 0.5
+    done
+
+    log_info "等待数据推送到 ELK 和 Jaeger..."
     sleep 10
 
     show_access_info_full
+
+    # 显示额外的使用提示
+    echo ""
+    log_info "在 Kibana 中创建索引模式:"
+    echo "  1. 访问 http://localhost:5601"
+    echo "  2. Stack Management → 索引模式"
+    echo "  3. 创建索引模式: ceph-exporter-*"
+    echo "  4. 选择时间字段: @timestamp"
+    echo ""
+    log_info "在 Jaeger UI 中查看追踪:"
+    echo "  1. 访问 http://localhost:16686"
+    echo "  2. Service 选择: ceph-exporter"
+    echo "  3. 点击 'Find Traces'"
+    echo "  4. 查看追踪数据（包含响应状态码和 Span 状态）"
+    echo ""
 }
 
 # -----------------------------------------------------------------------------
 # 信息显示函数
 # -----------------------------------------------------------------------------
 
-# 显示最小栈访问信息
+# 显示访问信息（最小栈）
+# 说明：显示最小监控栈部署后的所有服务访问地址
 show_access_info_minimal() {
     log_step "服务访问信息:"
     echo ""
-    echo "监控服务:"
-    echo "  Ceph Exporter:   http://localhost:9128/metrics"
-    echo "  Prometheus:      http://localhost:9090"
-    echo "  Grafana:         http://localhost:3000 (admin/admin)"
-    echo "  Alertmanager:    http://localhost:9093"
+    echo -e "${GREEN}访问地址：${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${BLUE}📊 Grafana 监控仪表盘（中文）：${NC}"
+    echo "   http://localhost:3000"
+    echo "   账号：admin / admin"
+    echo ""
+    echo -e "${BLUE}📈 Prometheus 指标查询：${NC}"
+    echo "   http://localhost:9090"
+    echo ""
+    echo -e "${BLUE}🔔 Alertmanager 告警管理（中文）：${NC}"
+    echo "   http://localhost:9093"
+    echo ""
+    echo -e "${BLUE}🔌 Ceph Exporter：${NC}"
+    echo "   http://localhost:9128/metrics"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "提示：首次启动可能需要 1-2 分钟初始化"
     echo ""
 }
 
-# 显示集成测试环境访问信息
+# 显示访问信息（集成测试）
+# 说明：显示集成测试环境部署后的所有服务访问地址（包含 Ceph RGW）
 show_access_info_integration() {
     log_step "服务访问信息:"
     echo ""
-    echo "Ceph 服务:"
-    echo "  Ceph Dashboard:  http://localhost:8080"
+    echo -e "${GREEN}访问地址：${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${BLUE}🗄️  Ceph RGW (S3 对象存储 API)：${NC}"
+    echo "   http://localhost:8080"
     echo ""
-    echo "监控服务:"
-    echo "  Ceph Exporter:   http://localhost:9128/metrics"
-    echo "  Prometheus:      http://localhost:9090"
-    echo "  Grafana:         http://localhost:3000 (admin/admin)"
+    echo -e "${BLUE}📊 Grafana 监控仪表盘（中文）：${NC}"
+    echo "   http://localhost:3000"
+    echo "   账号：admin / admin"
+    echo ""
+    echo -e "${BLUE}📈 Prometheus 指标查询：${NC}"
+    echo "   http://localhost:9090"
+    echo ""
+    echo -e "${BLUE}🔌 Ceph Exporter：${NC}"
+    echo "   http://localhost:9128/metrics"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "提示：首次启动可能需要 1-2 分钟初始化"
     echo ""
 }
 
-# 显示完整栈访问信息
+# 显示访问信息（完整栈）
+# 说明：显示完整栈部署后的所有服务访问地址（包含 ELK、Jaeger 等）
 show_access_info_full() {
-    log_step "服务访问信息:"
+    log_step "服务启动成功！"
     echo ""
-    echo "Ceph 服务:"
-    echo "  Ceph Dashboard:  http://localhost:8080"
+    echo -e "${GREEN}访问地址：${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${BLUE}🗄️  Ceph RGW (S3 对象存储 API)：${NC}"
+    echo "   http://localhost:8080"
     echo ""
-    echo "监控服务:"
-    echo "  Ceph Exporter:   http://localhost:9128/metrics"
-    echo "  Prometheus:      http://localhost:9090"
-    echo "  Grafana:         http://localhost:3000 (admin/admin)"
-    echo "  Alertmanager:    http://localhost:9093"
+    echo -e "${BLUE}📊 Grafana 监控仪表盘（中文）：${NC}"
+    echo "   http://localhost:3000"
+    echo "   账号：admin / admin"
     echo ""
-    echo "日志服务:"
-    echo "  Elasticsearch:   http://localhost:9200"
-    echo "  Kibana:          http://localhost:5601"
+    echo -e "${BLUE}📈 Prometheus 指标查询：${NC}"
+    echo "   http://localhost:9090"
     echo ""
-    echo "追踪服务:"
-    echo "  Jaeger UI:       http://localhost:16686"
+    echo -e "${BLUE}🔔 Alertmanager 告警管理（中文）：${NC}"
+    echo "   http://localhost:9093"
+    echo ""
+    echo -e "${BLUE}📋 Kibana 日志分析（中文）：${NC}"
+    echo "   http://localhost:5601"
+    echo ""
+    echo -e "${BLUE}🔍 Jaeger 链路追踪：${NC}"
+    echo "   http://localhost:16686"
+    echo ""
+    echo -e "${BLUE}🔌 Elasticsearch：${NC}"
+    echo "   http://localhost:9200"
+    echo ""
+    echo -e "${BLUE}🔌 Ceph Exporter：${NC}"
+    echo "   http://localhost:9128/metrics"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    log_info "提示：首次启动可能需要 1-2 分钟初始化"
+    log_info "所有服务已配置中文界面，包括 Grafana、Prometheus 告警、Alertmanager"
     echo ""
 }
 
@@ -683,18 +786,20 @@ show_access_info_full() {
 
 # 查看服务状态
 # 说明：
-#   - 自动检测使用的配置文件
+#   - 自动检测当前运行的 compose 配置
+#   - 根据运行的容器名称判断使用的配置文件
 #   - 显示所有容器的状态
 show_status() {
     log_step "服务状态:"
 
     cd "$DEPLOY_DIR"
 
-    # 检查是否有运行中的 compose 项目
+    # 尝试查找正在运行的 compose 文件
     # docker ps --format: 自定义输出格式
     # com.docker.compose.project: compose 项目标签
     if docker ps --format '{{.Label "com.docker.compose.project"}}' | grep -q "deployments"; then
-        # 根据运行的容器判断使用的配置文件
+        # 检测使用的 compose 文件
+        # 根据运行的容器名判断部署模式
         if docker ps --format '{{.Names}}' | grep -q "kibana"; then
             # 包含 kibana 说明是完整栈
             ${COMPOSE_CMD} -f docker-compose-lightweight-full.yml ps
@@ -716,6 +821,7 @@ show_status() {
 # 说明：
 #   - 可以查看所有服务或指定服务的日志
 #   - 使用 -f 参数实时跟踪日志
+#   - 自动检测使用的配置文件
 # 参数：
 #   $1 - 可选，指定服务名称
 show_logs() {
@@ -724,7 +830,8 @@ show_logs() {
     # 获取服务名称参数（如果有）
     local service="${1:-}"
 
-    # 自动检测使用的配置文件
+    # 检测使用的 compose 文件
+    # 自动检测当前使用的配置文件
     local compose_file="docker-compose.yml"
     if docker ps --format '{{.Names}}' | grep -q "kibana"; then
         compose_file="docker-compose-lightweight-full.yml"
@@ -745,63 +852,94 @@ show_logs() {
 # 说明：
 #   - 检查各服务的健康检查端点
 #   - 使用 curl 测试服务是否可访问
+#   - 自动检测已部署的服务并验证
+#   - 同时验证容器时区配置是否与宿主机一致
 verify_deployment() {
     log_step "验证部署状态..."
 
     # 定义基础服务列表（服务名:端口/路径）
     local services=(
-        "ceph-exporter:9128/health"      # ceph-exporter 健康检查
-        "prometheus:9090/-/healthy"      # Prometheus 健康检查
-        "grafana:3000/api/health"        # Grafana 健康检查
+        "ceph-exporter:9128/health"
+        "prometheus:9090/-/healthy"
+        "grafana:3000/api/health"
     )
 
-    # 如果部署了完整栈，添加额外的服务
+    # 检查是否部署了完整栈
+    # 如果有 elasticsearch 容器运行，说明是完整栈，添加额外服务检查
     if docker ps --format '{{.Names}}' | grep -q "elasticsearch"; then
         services+=(
-            "elasticsearch:9200"         # Elasticsearch API
-            "kibana:5601/api/status"     # Kibana 状态
-            "jaeger:16686"               # Jaeger UI
+            "elasticsearch:9200"
+            "kibana:5601/api/status"
+            "jaeger:16686"
         )
     fi
 
-    # 如果部署了 Ceph Demo，添加 Ceph 服务
+    # 检查是否部署了 Ceph Demo
     if docker ps --format '{{.Names}}' | grep -q "ceph-demo"; then
-        services+=("ceph-demo:8080")     # Ceph Dashboard
+        services+=("ceph-demo:8080")
     fi
 
     echo ""
     # 遍历服务列表，逐个检查
     for service in "${services[@]}"; do
         # 分割服务名和端点
-        local name="${service%%:*}"      # 提取冒号前的部分（服务名）
-        local endpoint="${service#*:}"   # 提取冒号后的部分（端点）
+        # ${service%%:*}: 提取冒号前的部分（服务名）
+        # ${service#*:}: 提取冒号后的部分（端点）
+        local name="${service%%:*}"
+        local endpoint="${service#*:}"
 
         log_info "检查 ${name}..."
 
-        # 使用 curl 测试端点
-        # -s: 静默模式
-        # -f: 失败时返回非零状态码
-        # > /dev/null 2>&1: 丢弃所有输出
-        if curl -sf "http://localhost:${endpoint}" > /dev/null 2>&1; then
-            echo -e "${GREEN}✓${NC} ${name} 运行正常"
+        # 特殊处理 ceph-demo：RGW 根路径返回 404 是正常的
+        # 说明：Ceph RGW 的根路径会返回 NoSuchBucket 或 InvalidBucketName，这是正常行为
+        if [ "$name" = "ceph-demo" ]; then
+            if curl -s "http://localhost:${endpoint}" 2>&1 | grep -q "NoSuchBucket\|InvalidBucketName\|404"; then
+                echo -e "${GREEN}✓${NC} ${name} 运行正常"
+            else
+                echo -e "${YELLOW}✗${NC} ${name} 无法访问或尚未就绪"
+            fi
         else
-            echo -e "${YELLOW}✗${NC} ${name} 无法访问或尚未就绪"
+            # 使用 curl 测试端点
+            # -s: 静默模式
+            # -f: 失败时返回非零状态码
+            # > /dev/null 2>&1: 丢弃所有输出
+            if curl -sf "http://localhost:${endpoint}" > /dev/null 2>&1; then
+                echo -e "${GREEN}✓${NC} ${name} 运行正常"
+            else
+                echo -e "${YELLOW}✗${NC} ${name} 无法访问或尚未就绪"
+            fi
         fi
     done
+    echo ""
+
+    # 验证时区配置
+    # 说明：检查容器时区是否与宿主机一致，确保日志和指标时间戳正确
+    log_info "验证容器时区配置..."
+    if docker ps --format '{{.Names}}' | grep -q "ceph-exporter"; then
+        local host_tz=$(date +"%Z %z")
+        local container_tz=$(docker exec ceph-exporter date +"%Z %z" 2>/dev/null || echo "无法获取")
+        if [ "$host_tz" = "$container_tz" ]; then
+            echo -e "${GREEN}✓${NC} 容器时区与宿主机一致: $host_tz"
+        else
+            echo -e "${YELLOW}!${NC} 宿主机时区: $host_tz, 容器时区: $container_tz"
+        fi
+    fi
     echo ""
 }
 
 # 停止所有服务
 # 说明：
 #   - 停止所有可能运行的配置
-#   - 不删除数据卷
+#   - 遍历所有 compose 文件逐个停止
+#   - 不删除数据目录
 stop_services() {
     log_step "停止服务..."
 
     cd "$DEPLOY_DIR"
 
+    # 检测并停止所有可能运行的 compose 配置
     # 遍历所有配置文件，逐个停止
-    for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml; do
+    for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml docker-compose-ceph-demo.yml; do
         if [ -f "$compose_file" ]; then
             # down: 停止并删除容器、网络
             # 2>/dev/null: 忽略错误（文件可能未运行）
@@ -813,14 +951,13 @@ stop_services() {
     log_info "所有服务已停止"
 }
 
-# 清理数据卷
+# 清理数据
 # 说明：
-#   - 停止服务并删除所有持久化数据
+#   - 停止所有服务并删除持久化数据目录
 #   - 需要用户确认（防止误操作）
+#   - 包括 Prometheus 数据、Grafana 配置、Elasticsearch 索引等
 clean_data() {
     log_warn "此操作将停止所有服务并删除持久化数据"
-    log_warn "包括: Prometheus 数据、Grafana 配置、Elasticsearch 索引等"
-
     # 要求用户确认
     read -p "确认继续? (y/N): " confirm
     if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -828,17 +965,23 @@ clean_data() {
         exit 0
     fi
 
-    log_step "停止服务并清除数据卷..."
+    log_step "停止服务并清除数据..."
 
     cd "$DEPLOY_DIR"
 
-    # 停止并删除所有配置的容器和数据卷
-    for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml; do
+    # 停止所有服务
+    for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml docker-compose-ceph-demo.yml; do
         if [ -f "$compose_file" ]; then
-            # -v: 同时删除数据卷
-            ${COMPOSE_CMD} -f "$compose_file" down -v 2>/dev/null || true
+            ${COMPOSE_CMD} -f "$compose_file" down 2>/dev/null || true
         fi
     done
+
+    # 删除数据目录
+    if [ -d "data" ]; then
+        log_info "删除数据目录..."
+        rm -rf data/
+        log_info "数据目录已删除"
+    fi
 
     log_info "所有服务已停止，数据卷已清除"
 }
@@ -848,30 +991,55 @@ clean_data() {
 # -----------------------------------------------------------------------------
 
 # 显示帮助信息
+# 说明：显示所有可用命令、别名和使用示例
 show_help() {
+    print_banner
     cat << 'EOF'
-ceph-exporter 部署脚本
 
 用法:
-  ./deploy.sh <command>
+  ./deploy.sh <命令>
 
 命令:
   check           检查系统环境（Docker、资源、防火墙等）
   mirror          配置 Docker 镜像加速器
   pull            预拉取所有镜像
-  minimal         部署最小监控栈
-  integration     部署集成测试环境
-  full            部署完整轻量级栈（推荐）
+  init            初始化数据目录（创建目录并设置权限）
+  minimal         部署最小监控栈（标准部署，需要现有 Ceph 集群）
+  integration     部署集成测试环境（包含 Ceph Demo）
+  full            部署完整轻量级栈（包含 Ceph Demo + ELK + Jaeger，推荐）
   status          查看服务状态
   logs [service]  查看日志（可指定服务名）
   verify          验证部署状态
+  diagnose [svc]  诊断服务问题（可指定服务名或 all）
+  fix             修复常见部署问题（权限、配置等）
   stop            停止所有服务
-  clean           停止服务并清除数据卷
+  clean           停止服务并清除数据
   help            显示此帮助信息
 
+别名（为了兼容性）:
+  standard        等同于 minimal（标准部署）
+  test            等同于 integration（集成测试）
+
 示例:
-  # 完整部署（推荐）
+  # 完整部署（推荐，包含中文界面）
   ./deploy.sh full
+
+  # 完整部署 - 指定日志方案（跳过交互选择）
+  LOGGING_MODE=container ./deploy.sh full     # 容器日志收集（推荐）
+  LOGGING_MODE=direct ./deploy.sh full        # 直接推送到 Logstash (TCP)
+  LOGGING_MODE=direct-udp ./deploy.sh full    # 直接推送到 Logstash (UDP)
+  LOGGING_MODE=file ./deploy.sh full          # 文件日志 + Filebeat
+  LOGGING_MODE=dev ./deploy.sh full           # 开发模式
+
+  # 标准部署（连接现有 Ceph 集群）
+  ./deploy.sh minimal
+  # 或
+  ./deploy.sh standard
+
+  # 集成测试环境
+  ./deploy.sh integration
+  # 或
+  ./deploy.sh test
 
   # 检查环境
   ./deploy.sh check
@@ -882,8 +1050,30 @@ ceph-exporter 部署脚本
   # 查看特定服务日志
   ./deploy.sh logs ceph-exporter
 
+  # 完整诊断
+  ./deploy.sh diagnose
+
+  # 诊断特定服务
+  ./deploy.sh diagnose ceph-exporter
+
   # 验证部署
   ./deploy.sh verify
+
+  # 修复部署问题
+  ./deploy.sh fix
+
+中文界面支持:
+  所有部署模式都已配置中文界面，包括：
+  - Grafana 监控仪表盘（中文界面和 Dashboard）
+  - Prometheus 告警规则（中文描述）
+  - Alertmanager 告警管理（中文配置）
+  - Kibana 日志分析（中文界面支持）
+
+故障排查:
+  如果遇到部署问题，请查看:
+  - 故障排查指南: cat TROUBLESHOOTING.md
+  - 运行修复脚本: ./deploy.sh fix
+  - 查看服务日志: ./deploy.sh logs <service-name>
 EOF
 }
 
@@ -892,6 +1082,7 @@ EOF
 # -----------------------------------------------------------------------------
 
 # 执行所有环境检查
+# 说明：依次调用所有检查函数，完成全面的环境验证
 full_check() {
     check_root
     check_os
@@ -910,7 +1101,8 @@ full_check() {
 
 # 主函数 - 根据命令参数执行相应操作
 # 参数：
-#   $1 - 命令名称（check/mirror/pull/minimal/integration/full/status/logs/verify/stop/clean/help）
+#   $1 - 命令名称（check/mirror/pull/init/minimal/standard/integration/test/full/status/logs/verify/diagnose/fix/stop/clean/help）
+# 主函数
 main() {
     # ${1:-help}: 如果没有参数，默认为 help
     case "${1:-help}" in
@@ -929,15 +1121,19 @@ main() {
             check_docker_compose
             pull_images
             ;;
-        minimal)
-            # 部署最小栈
+        init)
+            # 只初始化数据目录
+            init_data_dirs
+            ;;
+        minimal|standard)
+            # 部署最小栈（standard 是 minimal 的别名）
             full_check
             configure_mirror
             deploy_minimal
             verify_deployment
             ;;
-        integration)
-            # 部署集成测试环境
+        integration|test)
+            # 部署集成测试环境（test 是 integration 的别名）
             full_check
             configure_mirror
             pull_images
@@ -960,12 +1156,25 @@ main() {
         logs)
             # 查看日志
             check_docker_compose
-            shift  # 移除第一个参数
-            show_logs "$@"  # 传递剩余参数
+            shift
+            show_logs "$@"
             ;;
         verify)
             # 验证部署
             verify_deployment
+            ;;
+        diagnose)
+            # 诊断服务问题
+            # 说明：调用独立的诊断脚本，支持指定服务名或 all
+            shift
+            log_info "运行诊断脚本..."
+            exec "$SCRIPT_DIR/diagnose.sh" "$@"
+            ;;
+        fix)
+            # 修复常见部署问题
+            # 说明：调用独立的修复脚本，自动修复权限、配置等问题
+            log_info "运行修复脚本..."
+            exec "$SCRIPT_DIR/fix-deployment.sh"
             ;;
         stop)
             # 停止服务
@@ -985,4 +1194,5 @@ main() {
 }
 
 # 执行主函数，传递所有命令行参数
+# "$@": 所有命令行参数（保持原始引号和空格）
 main "$@"

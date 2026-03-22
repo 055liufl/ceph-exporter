@@ -51,17 +51,21 @@ logger:
   max_backups: 3                # 保留的旧日志文件数量
   max_age: 28                   # 保留日志文件的最大天数
   compress: true                # 是否压缩归档的旧日志文件
-  enable_elk: false             # 是否启用 ELK 日志集成（Phase 3 实现）
-  logstash_url: "logstash:5044" # Logstash 地址（enable_elk=true 时生效）
+  enable_elk: false             # 是否启用 ELK 日志集成
+  logstash_url: "logstash:5000" # Logstash 地址（host:port，enable_elk=true 时生效）
+  # Logstash 传输协议（tcp 或 udp）
+  logstash_protocol: "tcp"      # 协议: tcp（可靠，默认）或 udp（快速）
+  # 服务名称（用于 Logstash 日志标识）
+  service_name: "ceph-exporter" # ELK 中用于标识本服务的名称
 
 # -----------------------------------------------------------------------------
-# 追踪配置（Phase 3 实现，此处仅定义配置结构）
+# 追踪配置
 # 使用 OpenTelemetry + Jaeger 实现分布式追踪
 # 环境变量覆盖: JAEGER_URL, SERVICE_NAME
 # -----------------------------------------------------------------------------
 tracer:
-  enabled: false                                    # 是否启用追踪（Phase 1 默认关闭）
-  jaeger_url: "http://jaeger:14268/api/traces"      # Jaeger Collector URL
+  enabled: true                                     # 是否启用追踪（默认开启）
+  jaeger_url: "jaeger:4318"                          # Jaeger OTLP HTTP 端点（host:port，无需 http:// 前缀）
   service_name: "ceph-exporter"                     # 服务名称
   sample_rate: 1.0                                  # 采样率 (0.0-1.0)
 

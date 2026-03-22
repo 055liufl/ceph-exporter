@@ -1,25 +1,29 @@
 #!/bin/bash
 # =============================================================================
-# 彻底清理 Ceph 数据卷内容 - 详细中文注释版本
+# Ceph 数据目录彻底清理脚本 - 详细中文注释版本
 # =============================================================================
 # 功能说明：
-#   这个脚本用于彻底清理 Ceph Demo 的数据卷，解决数据损坏或配置错误问题
+#   彻底清理 Ceph 数据目录，用于解决数据损坏或配置错误问题
+#
+# 工作流程：
+#   1. 停止所有相关服务（Ceph Demo、完整监控栈、集成测试等）
+#   2. 删除 ./data/ 目录中的所有持久化数据
+#   3. 重新初始化数据目录结构
+#   4. 重新启动 Ceph Demo 服务
+#   5. 等待 Ceph 集群初始化（约 5 分钟）
+#   6. 检查容器状态和 Ceph 集群健康状况
 #
 # 使用场景：
-#   1. Ceph Demo 无法正常启动
-#   2. Ceph 集群状态异常（HEALTH_ERR）
-#   3. 需要完全重置 Ceph 环境
-#   4. 数据卷中有损坏的文件
-#
-# 工作原理：
-#   - Docker 数据卷即使删除容器也会保留
-#   - 使用临时容器挂载数据卷并删除其中的文件
-#   - 重新启动 Ceph Demo 会自动初始化新的数据
+#   - Ceph Demo 无法正常启动
+#   - Ceph 集群状态异常（HEALTH_ERR）
+#   - 需要完全重置 Ceph 环境
+#   - 数据目录中有损坏的文件
 #
 # 注意事项：
-#   - 此操作会删除所有 Ceph 数据，无法恢复
+#   - 此操作会删除所有 Ceph 数据，无法恢复！
+#   - 现在使用绑定挂载，数据存储在 ./data/ 目录
+#   - 建议使用 ./deploy.sh clean 命令代替此脚本
 #   - 需要等待约 5 分钟让 Ceph 重新初始化
-#   - 确保没有重要数据在 Ceph Demo 中
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -29,179 +33,134 @@
 set -e
 
 # -----------------------------------------------------------------------------
+# 目录路径定义
+# -----------------------------------------------------------------------------
+# SCRIPT_DIR: 当前脚本所在目录的绝对路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# DEPLOY_DIR: 部署配置目录（脚本目录的上级目录）
+DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
+
+# -----------------------------------------------------------------------------
 # 显示操作说明和警告
 # -----------------------------------------------------------------------------
 echo "=========================================="
-echo "彻底清理 Ceph 数据卷"
+echo "彻底清理 Ceph 数据目录"
 echo "=========================================="
 echo ""
-echo "此脚本将执行以下操作:"
-echo "  1. 停止所有相关服务"
-echo "  2. 启动临时容器挂载数据卷"
-echo "  3. 手动删除卷内的所有文件（包括隐藏文件）"
-echo "  4. 验证数据卷已清空"
-echo "  5. 重新启动 Ceph Demo"
-echo "  6. 等待 5 分钟让 Ceph 完全初始化"
-echo "  7. 检查 Ceph 状态"
+echo "此脚本将:"
+echo "  1. 停止所有服务"
+echo "  2. 删除 ./data/ 目录中的所有数据"
+echo "  3. 重新初始化数据目录"
+echo "  4. 重新启动 Ceph Demo"
 echo ""
-echo "⚠️  警告: 此操作将删除所有 Ceph 数据，无法恢复！"
+echo "⚠️  警告: 这将删除所有持久化数据！"
 echo ""
 
 # 要求用户明确确认
-# 必须输入 "yes" 才能继续（而不是 y/Y）
+# 必须输入 "yes" 才能继续（而不是 y/Y），防止误操作
 read -p "确认继续? (输入 yes): " confirm
 
-# 检查用户输入
+# 检查用户输入是否为 "yes"
 if [ "$confirm" != "yes" ]; then
     echo "操作已取消"
     exit 0
 fi
 
-# -----------------------------------------------------------------------------
 # 切换到部署目录
-# -----------------------------------------------------------------------------
-# 所有 docker-compose 配置文件都在这个目录
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+# 所有 docker compose 配置文件都在这个目录
+cd "$DEPLOY_DIR"
 
 # -----------------------------------------------------------------------------
 # 步骤 1: 停止所有服务
 # -----------------------------------------------------------------------------
 echo ""
 echo "步骤 1: 停止所有服务..."
-echo "  - 停止 Ceph Demo 容器"
-echo "  - 停止完整监控栈容器"
-
-# 停止 Ceph Demo 配置
+# 依次停止各个 compose 配置的服务
 # 2>/dev/null: 忽略错误输出（如果服务未运行）
-# || true: 即使失败也继续执行
-docker-compose -f docker-compose-ceph-demo.yml down 2>/dev/null || true
-
-# 停止完整监控栈配置
-docker-compose -f docker-compose-lightweight-full.yml down 2>/dev/null || true
-
-echo "  ✓ 所有服务已停止"
+# || true: 即使失败也继续执行（确保后续步骤不受影响）
+docker compose -f docker-compose-ceph-demo.yml down 2>/dev/null || true
+docker compose -f docker-compose-lightweight-full.yml down 2>/dev/null || true
+docker compose -f docker-compose-integration-test.yml down 2>/dev/null || true
+docker compose down 2>/dev/null || true
 
 # -----------------------------------------------------------------------------
-# 步骤 2: 清理 ceph-demo-data 数据卷
+# 步骤 2: 删除数据目录
 # -----------------------------------------------------------------------------
 echo ""
-echo "步骤 2: 使用临时容器清理 ceph-demo-data 卷..."
-echo "  - 数据卷名称: deployments_ceph-demo-data"
-echo "  - 挂载路径: /data"
-echo "  - 操作: 删除所有文件和隐藏文件"
-
-# docker run 参数说明：
-#   --rm: 容器退出后自动删除
-#   -v deployments_ceph-demo-data:/data: 挂载数据卷到 /data
-#   alpine: 使用轻量级 Alpine Linux 镜像
-#   sh -c "...": 执行 shell 命令
-#   rm -rf /data/*: 删除所有普通文件
-#   rm -rf /data/.*: 删除所有隐藏文件（以 . 开头）
-#   2>/dev/null: 忽略错误（如 . 和 .. 目录）
-docker run --rm -v deployments_ceph-demo-data:/data alpine sh -c "rm -rf /data/* /data/.*" 2>/dev/null || echo "  ✓ 数据卷已清理"
+echo "步骤 2: 删除数据目录..."
+if [ -d "data" ]; then
+    echo "删除 data/ 目录..."
+    # rm -rf: 递归强制删除，不提示确认
+    rm -rf data/
+    echo "✓ 数据目录已删除"
+else
+    echo "数据目录不存在，跳过"
+fi
 
 # -----------------------------------------------------------------------------
-# 步骤 3: 清理 ceph-demo-config 配置卷
+# 步骤 3: 重新初始化数据目录
 # -----------------------------------------------------------------------------
 echo ""
-echo "步骤 3: 使用临时容器清理 ceph-demo-config 卷..."
-echo "  - 数据卷名称: deployments_ceph-demo-config"
-echo "  - 挂载路径: /config"
-echo "  - 操作: 删除所有配置文件"
-
-# 清理配置卷（包含 ceph.conf、keyring 等）
-docker run --rm -v deployments_ceph-demo-config:/config alpine sh -c "rm -rf /config/* /config/.*" 2>/dev/null || echo "  ✓ 配置卷已清理"
+echo "步骤 3: 重新初始化数据目录..."
+# 调用 deploy.sh 的 init 子命令重建目录结构和权限
+./scripts/deploy.sh init
 
 # -----------------------------------------------------------------------------
-# 步骤 4: 验证卷已清空
+# 步骤 4: 启动 Ceph Demo
 # -----------------------------------------------------------------------------
 echo ""
-echo "步骤 4: 验证卷已清空..."
-
-# 检查 ceph-demo-data 卷内容
-echo "  ceph-demo-data 内容:"
-# ls -la: 列出所有文件（包括隐藏文件）
-# || echo "卷为空": 如果 ls 失败（目录为空），显示提示
-docker run --rm -v deployments_ceph-demo-data:/data alpine ls -la /data || echo "    ✓ 卷为空"
-
-echo ""
-# 检查 ceph-demo-config 卷内容
-echo "  ceph-demo-config 内容:"
-docker run --rm -v deployments_ceph-demo-config:/config alpine ls -la /config || echo "    ✓ 卷为空"
+echo "步骤 4: 启动 Ceph Demo..."
+# -d: 后台运行（detached mode）
+docker compose -f docker-compose-ceph-demo.yml up -d
 
 # -----------------------------------------------------------------------------
-# 步骤 5: 启动 Ceph Demo
+# 步骤 5: 等待 Ceph 初始化
 # -----------------------------------------------------------------------------
 echo ""
-echo "步骤 5: 启动 Ceph Demo..."
-echo "  - 使用配置: docker-compose-ceph-demo.yml"
-echo "  - 模式: 后台运行 (-d)"
-
-# 启动 Ceph Demo
-# -d: 后台运行
-docker-compose -f docker-compose-ceph-demo.yml up -d
-
-echo "  ✓ Ceph Demo 已启动"
-
-# -----------------------------------------------------------------------------
-# 步骤 6: 等待 Ceph 初始化
-# -----------------------------------------------------------------------------
-echo ""
-echo "步骤 6: 等待 Ceph 初始化（5 分钟）..."
-echo "  - Ceph 需要时间创建 Monitor、OSD、MDS 等组件"
-echo "  - 初始化过程包括: 创建集群、格式化 OSD、启动服务"
-echo ""
-
-# 循环 300 次，每次 1 秒，总共 5 分钟
+echo "步骤 5: 等待 Ceph 初始化（5 分钟）..."
+# 循环 300 次，每次 1 秒，总共等待 5 分钟
+# Ceph 需要时间创建 Monitor、OSD、MDS 等组件
 for i in {1..300}; do
-    # -n: 不换行
+    # -n: 不换行，持续在同一行输出进度点
     echo -n "."
     sleep 1
-
     # 每 30 秒显示一次进度
     # $((i % 30)): 计算 i 除以 30 的余数
-    # -eq 0: 等于 0（即每 30 秒）
+    # -eq 0: 等于 0 时（即每 30 秒）显示已等待秒数
     if [ $((i % 30)) -eq 0 ]; then
         echo " ${i}秒"
     fi
 done
 echo ""
-echo "  ✓ 等待完成"
 
 # -----------------------------------------------------------------------------
-# 步骤 7: 检查容器状态
+# 步骤 6: 检查容器状态
 # -----------------------------------------------------------------------------
 echo ""
-echo "步骤 7: 检查容器状态..."
-
-# 显示 ceph-demo 容器的状态
+echo "步骤 6: 检查状态..."
 # --filter name=ceph-demo: 只显示名称包含 ceph-demo 的容器
 docker ps --filter name=ceph-demo
 
 # -----------------------------------------------------------------------------
-# 步骤 8: 查看容器日志
+# 步骤 7: 查看容器日志
 # -----------------------------------------------------------------------------
 echo ""
-echo "步骤 8: 查看最近的日志（最后 50 行）..."
-
-# 查看容器日志
-# --tail 50: 只显示最后 50 行
+echo "步骤 7: 查看日志..."
+# --tail 50: 只显示最后 50 行日志
 docker logs ceph-demo --tail 50
 
 # -----------------------------------------------------------------------------
-# 步骤 9: 测试 Ceph 命令
+# 步骤 8: 测试 Ceph 集群状态
 # -----------------------------------------------------------------------------
 echo ""
-echo "步骤 9: 测试 Ceph 集群状态..."
-echo "  - 执行命令: ceph -s"
-echo "  - 超时时间: 30 秒"
-
-# 在容器中执行 ceph -s 命令
+echo "步骤 8: 测试 Ceph..."
 # timeout 30: 最多等待 30 秒
 # docker exec: 在运行的容器中执行命令
-# 2>&1: 将错误输出重定向到标准输出
-# || echo "...": 如果命令失败，显示警告
-timeout 30 docker exec ceph-demo ceph -s 2>&1 || echo "⚠️  Ceph 命令超时或失败"
+# ceph -s: 查看 Ceph 集群状态（正常应显示 HEALTH_OK）
+# 2>&1: 将标准错误合并到标准输出
+# || echo "...": 如果命令超时或失败，显示警告
+timeout 30 docker exec ceph-demo ceph -s 2>&1 || echo "⚠️  Ceph 命令超时"
 
 # -----------------------------------------------------------------------------
 # 完成提示
@@ -211,16 +170,5 @@ echo "=========================================="
 echo "清理完成"
 echo "=========================================="
 echo ""
-echo "后续步骤:"
-echo "  1. 检查上面的 'ceph -s' 输出"
-echo "  2. 如果显示 HEALTH_OK，说明 Ceph 已正常运行"
-echo "  3. 如果显示 HEALTH_WARN 或 HEALTH_ERR，可能需要更多时间"
-echo "  4. 可以使用以下命令继续监控:"
-echo "     docker logs -f ceph-demo"
-echo "     docker exec ceph-demo ceph -s"
-echo ""
-echo "常见问题:"
-echo "  - 如果 Ceph 仍然无法启动，检查系统资源（内存、磁盘）"
-echo "  - 如果端口冲突，检查 8080 端口是否被占用"
-echo "  - 如果网络问题，检查 Docker 网络配置"
-echo ""
+echo "数据存储位置: $DEPLOY_DIR/data/"
+echo "查看数据: ls -lh data/"

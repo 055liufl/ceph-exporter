@@ -1,0 +1,77 @@
+# =============================================================================
+# Filebeat Sidecar 配置文件 - 采集 ceph-exporter 容器日志
+# =============================================================================
+#
+# 【文件用途】
+#   配置 Filebeat 作为 sidecar 容器，自动采集 ceph-exporter 容器的
+#   标准输出日志，并将其转发到 Logstash 进行集中存储和分析。
+#
+# 【什么是 Filebeat Sidecar】
+#   Filebeat 是 Elastic 官方的轻量级日志采集器。在 sidecar 模式下，
+#   Filebeat 作为独立容器与应用容器并行运行：
+#     - ceph-exporter 输出 JSON 日志到 stdout
+#     - Docker 将 stdout 日志写入 /var/lib/docker/containers/ 下的日志文件
+#     - Filebeat 监控这些日志文件，实时采集并转发到 Logstash
+#   这种模式的优势：应用无需关心日志传输，专注业务逻辑即可。
+#
+# 【使用方法】
+#   1. 确保 ceph-exporter 配置为 JSON 格式输出到 stdout
+#   2. 将本文件挂载到 Filebeat 容器的 /usr/share/filebeat/filebeat.yml
+#   3. Filebeat 容器需要挂载 Docker socket 和容器日志目录
+#   4. 参考 docker-compose-elk.yaml 中的 filebeat-sidecar 服务配置
+#
+# 【对应部署方案】
+#   本配置对应 logger-examples.yaml 中的「场景 2: 容器日志收集（推荐）」
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 输入配置 - 采集 Docker 容器日志
+# -----------------------------------------------------------------------------
+filebeat.inputs:
+# 采集 Docker 容器日志
+- type: container                                          # 输入类型：container（专门采集 Docker 容器日志）
+  enabled: true                                            # 启用此输入
+  paths:
+    - /var/lib/docker/containers/*/*.log                   # Docker 容器日志路径（通配符匹配所有容器）
+  # 只采集 ceph-exporter 容器的日志
+  include_lines: []                                        # 行过滤规则（空数组表示不过滤，采集所有行）
+  # 解析 JSON 格式日志
+  json.keys_under_root: true                               # JSON 字段提升到根级别（而非嵌套在 json.* 下）
+  json.add_error_key: true                                 # JSON 解析失败时添加 error.message 字段
+  json.message_key: message                                # 指定 JSON 中的消息字段名（用于日志展示）
+  # 添加额外字段
+  fields:                                                  # 自定义字段（附加到每条日志事件）
+    service: ceph-exporter                                 # 服务标识：标记日志来源为 ceph-exporter
+  fields_under_root: true                                  # 自定义字段提升到根级别（而非嵌套在 fields.* 下）
+
+# -----------------------------------------------------------------------------
+# 处理器 - 过滤只保留 ceph-exporter 容器日志
+# -----------------------------------------------------------------------------
+# 处理器按顺序执行，先添加容器元数据，再根据容器名过滤
+processors:
+  # 处理器 1: 添加 Docker 容器元数据
+  - add_docker_metadata:                                   # 通过 Docker API 获取容器元数据（名称、镜像、标签等）
+      host: "unix:///var/run/docker.sock"                  # Docker daemon 的 Unix socket 路径
+
+  # 处理器 2: 丢弃非 ceph-exporter 容器的日志事件
+  - drop_event:                                            # 条件丢弃处理器
+      when:                                                # 丢弃条件
+        not:                                               # 取反：当容器名不等于 ceph-exporter 时丢弃
+          equals:
+            container.name: "ceph-exporter"                # 只保留容器名为 ceph-exporter 的日志
+
+# -----------------------------------------------------------------------------
+# 输出配置 - 发送到 Logstash
+# -----------------------------------------------------------------------------
+output.logstash:
+  hosts: ["logstash:5044"]                                 # Logstash 服务地址（Beats 输入端口）
+  loadbalance: true                                        # 启用负载均衡（多个 Logstash 实例时轮询分发）
+  compression_level: 3                                     # 压缩级别：3（1-9，平衡压缩率与 CPU 开销）
+  timeout: 30                                              # 连接超时时间：30 秒
+  bulk_max_size: 2048                                      # 批量发送最大事件数：2048（提高吞吐量）
+
+# -----------------------------------------------------------------------------
+# Filebeat 自身日志配置
+# -----------------------------------------------------------------------------
+logging.level: info                                        # Filebeat 自身的日志级别：info
+logging.to_stderr: true                                    # 输出到标准错误流（便于在容器中查看）

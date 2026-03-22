@@ -1,14 +1,14 @@
 # =============================================================================
 # ceph-exporter Lightweight Full Stack (Recommended)
 # =============================================================================
-# Purpose: Lightweight complete deployment configuration for CentOS 7 + Docker
+# Purpose: Lightweight complete deployment configuration for Ubuntu 20.04 + Docker
 # Components: Ceph Demo + Monitoring Stack + ELK + Jaeger
 # Resource Requirements: 4-6GB memory, 2-4 CPU cores
 # Use Case: Complete testing, feature validation, demo environment
 #
 # Usage:
 #   # Start services
-#   docker-compose -f docker-compose-lightweight-full.yml up -d
+#   docker compose -f docker-compose-lightweight-full.yml up -d
 #   or
 #   ./scripts/deploy.sh full
 #
@@ -40,6 +40,7 @@ services:
       - CEPH_DEMO_UID=demo
       - CEPH_DEMO_ACCESS_KEY=demo_access_key
       - CEPH_DEMO_SECRET_KEY=demo_secret_key
+      - CEPH_DEMO_BUCKET=demo-bucket
       - RGW_CIVETWEB_PORT=8080
       - DEMO_DAEMONS=mon,mgr,osd,rgw
     ports:

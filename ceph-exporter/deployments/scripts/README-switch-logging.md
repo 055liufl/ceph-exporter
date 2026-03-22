@@ -7,7 +7,7 @@
 ### 使用方法
 
 ```bash
-cd /home/lfl/ceph-exporter/ceph-exporter
+cd ceph-exporter
 ./deployments/scripts/switch-logging-mode.sh [mode]
 ```
 
@@ -82,21 +82,21 @@ LOGGING_MODE=dev ./scripts/deploy.sh full           # 开发模式
 
 ```bash
 # 重启 ceph-exporter
-docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
+docker compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 
 # 验证日志推送
 docker logs ceph-exporter | grep -i elk
-# 应该看到: "ELK 集成已启用，日志将推送到 tcp://logstash:5044"
+# 应该看到: "ELK 集成已启用，日志将推送到 tcp://logstash:5000"
 ```
 
 #### 方案2（容器日志收集）
 
 ```bash
 # filebeat-sidecar 会由脚本自动启动，也可以手动启动
-docker-compose -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
+docker compose -f docker-compose-lightweight-full.yml up -d filebeat-sidecar
 
 # 重启 ceph-exporter
-docker-compose -f docker-compose-lightweight-full.yml restart ceph-exporter
+docker compose -f docker-compose-lightweight-full.yml restart ceph-exporter
 
 # 验证 Filebeat 状态
 docker logs filebeat-sidecar
@@ -111,5 +111,3 @@ docker logs filebeat-sidecar
 ### 相关文档
 
 - 完整指南: [docs/ELK-LOGGING-GUIDE.md](../../docs/ELK-LOGGING-GUIDE.md)
-- 实现总结: [docs/ELK-IMPLEMENTATION-SUMMARY.md](../../docs/ELK-IMPLEMENTATION-SUMMARY.md)
-- 快速参考: [docs/ELK-QUICK-REFERENCE.md](../../docs/ELK-QUICK-REFERENCE.md)

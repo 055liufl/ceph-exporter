@@ -29,13 +29,13 @@
 #
 # 【使用方法】
 #   启动服务:
-#     docker-compose -f docker-compose-ceph-demo.yml up -d
+#     docker compose -f docker-compose-ceph-demo.yml up -d
 #
 #   停止服务:
-#     docker-compose -f docker-compose-ceph-demo.yml down
+#     docker compose -f docker-compose-ceph-demo.yml down
 #
 #   查看日志:
-#     docker-compose -f docker-compose-ceph-demo.yml logs -f ceph-demo
+#     docker compose -f docker-compose-ceph-demo.yml logs -f ceph-demo
 #
 # 【访问地址】
 #   - Ceph Dashboard: http://localhost:8080
@@ -51,18 +51,6 @@
 #   4. 数据持久化在 Docker 卷中，删除卷会丢失所有数据
 #
 # =============================================================================
-
-# -----------------------------------------------------------------------------
-# Docker Compose 文件格式版本
-# -----------------------------------------------------------------------------
-# version: 指定 Docker Compose 配置文件的语法版本
-# "2.1" 版本特性:
-#   - 支持健康检查 (healthcheck)
-#   - 支持内存限制 (mem_limit)
-#   - 支持依赖条件 (depends_on with condition)
-#   - 支持扩展字段 (extension fields)
-# 注意: 版本 3.x 移除了某些 2.x 特性，如 mem_limit 需要使用 deploy.resources
-version: "2.1"
 
 # =============================================================================
 # 服务定义区域
@@ -93,16 +81,16 @@ services:
     # image: 指定使用的 Docker 镜像及版本标签
     #
     # 镜像说明:
-    #   - ceph/daemon: Ceph 官方维护的守护进程镜像
-    #   - latest-nautilus: Nautilus 版本标签 (Ceph 14.x LTS 长期支持版本)
+    #   - quay.io/ceph/daemon: Ceph 官方维护的守护进程镜像 (Quay.io 仓库)
+    #   - latest-octopus: Octopus 版本标签 (Ceph 15.x LTS 长期支持版本)
     #
     # Ceph 版本选择建议:
-    #   - Nautilus (14.x): 稳定的 LTS 版本，适合生产环境
-    #   - Octopus (15.x): 较新的 LTS 版本
-    #   - Pacific (16.x): 最新的 LTS 版本
+    #   - Octopus (15.x): 稳定的 LTS 版本
+    #   - Pacific (16.x): 较新的 LTS 版本
+    #   - Quincy (17.x): 最新的 LTS 版本
     #
-    # 注意: Demo 镜像包含所有 Ceph 组件，体积较大 (~1GB)
-    image: ceph/daemon:latest-nautilus
+    # 注意: 通过 CEPH_DAEMON=demo 环境变量启动演示模式
+    image: quay.io/ceph/daemon:latest-octopus
 
     # -------------------------------------------------------------------------
     # 容器标识配置
@@ -333,6 +321,11 @@ services:
       #   - 便于备份和恢复集群配置
       - ./data/ceph-demo/config:/etc/ceph
 
+      # 时区配置挂载 (只读)
+      # 确保容器时间与宿主机一致
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
     # -------------------------------------------------------------------------
     # 特权模式配置
     # -------------------------------------------------------------------------
@@ -354,11 +347,6 @@ services:
     #   ⚠ 容器内的进程可能影响宿主机
     #   ⚠ 生产环境应评估安全风险
     #   ⚠ 考虑使用更细粒度的 capabilities 替代
-
-      # 时区配置挂载 (只读)
-      # 确保容器时间与宿主机一致
-      - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
     privileged: true
 
     # -------------------------------------------------------------------------
@@ -501,7 +489,7 @@ networks:
 #
 # 【清理数据】
 #   停止服务并删除数据:
-#     docker-compose -f docker-compose-ceph-demo.yml down
+#     docker compose -f docker-compose-ceph-demo.yml down
 #     rm -rf data/ceph-demo/
 #   或使用脚本:
 #     ./scripts/clean-volumes.sh
@@ -519,11 +507,11 @@ networks:
 # 【快速参考】
 #
 # 常用命令:
-#   启动服务: docker-compose -f docker-compose-ceph-demo.yml up -d
-#   停止服务: docker-compose -f docker-compose-ceph-demo.yml down
-#   查看日志: docker-compose -f docker-compose-ceph-demo.yml logs -f
-#   重启服务: docker-compose -f docker-compose-ceph-demo.yml restart
-#   查看状态: docker-compose -f docker-compose-ceph-demo.yml ps
+#   启动服务: docker compose -f docker-compose-ceph-demo.yml up -d
+#   停止服务: docker compose -f docker-compose-ceph-demo.yml down
+#   查看日志: docker compose -f docker-compose-ceph-demo.yml logs -f
+#   重启服务: docker compose -f docker-compose-ceph-demo.yml restart
+#   查看状态: docker compose -f docker-compose-ceph-demo.yml ps
 #
 # 进入容器:
 #   docker exec -it ceph-demo bash
@@ -537,7 +525,7 @@ networks:
 # 数据卷管理:
 #   列出所有卷: docker volume ls
 #   查看卷详情: docker volume inspect ceph-demo-data
-#   删除所有卷: docker-compose -f docker-compose-ceph-demo.yml down -v
+#   删除所有卷: docker compose -f docker-compose-ceph-demo.yml down -v
 #
 # 故障排查:
 #   1. 容器无法启动: 检查日志 docker logs ceph-demo

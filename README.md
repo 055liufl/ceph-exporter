@@ -2,7 +2,7 @@
 
 基于 Go 语言开发的 Ceph 集群 Prometheus 指标导出器。
 
-**环境要求**: CentOS 7 + Docker
+**环境要求**: Ubuntu 20.04 + Docker
 
 ---
 
@@ -18,15 +18,14 @@ cd ceph-exporter/deployments
 - **Prometheus**: http://localhost:9090
 - **Grafana**: http://localhost:3000 (admin/admin)
 
-详细步骤请查看 [快速开始指南](QUICK_START.md)
+详细步骤请查看 [完整操作指南](Ceph-Exporter项目完整操作指南.md)
 
 ---
 
 ## 📖 文档导航
 
 ### 部署相关
-- 📘 [快速开始指南](QUICK_START.md) - 5 分钟快速部署
-- 📗 [完整部署指南](DEPLOYMENT_GUIDE.md) - 详细的环境准备和故障排查
+- 📘 [完整操作指南](Ceph-Exporter项目完整操作指南.md) - 部署、配置、使用一站式指南
 - 📙 [Docker 镜像加速配置](DOCKER_MIRROR_CONFIGURATION.md) - 国内用户必读
 - 📕 [部署配置说明](ceph-exporter/deployments/README.md) - Docker Compose 配置详解
 - 📓 [数据存储说明](ceph-exporter/deployments/DATA_STORAGE.md) - 数据目录结构和管理
@@ -54,7 +53,7 @@ cd ceph-exporter/deployments
 **完整监控栈包含**:
 - **存储层**: Ceph Demo (单节点 All-in-One 集群)
 - **监控层**: ceph-exporter、Prometheus、Grafana、Alertmanager
-- **日志层**: Elasticsearch、Logstash、Kibana (ELK Stack)
+- **日志层**: Elasticsearch、Logstash、Kibana、Filebeat (ELK Stack)
 - **追踪层**: Jaeger (分布式追踪)
 
 详见 [部署配置说明](ceph-exporter/deployments/README.md)
@@ -138,7 +137,7 @@ ceph-exporter/
 - ✅ **容器化部署**: Docker Compose 一键部署
 - ✅ **多种部署模式**: minimal、integration、full
 - ✅ **插件系统**: 支持自定义插件扩展
-- ✅ **完整测试**: 81 个单元测试，100% 通过率，覆盖率 68.1%
+- ✅ **完整测试**: 90 个单元测试，100% 通过率，覆盖率 68.1%
 
 ---
 
@@ -228,10 +227,10 @@ cd deployments
 ```bash
 # 编译项目
 cd ceph-exporter
-CGO_ENABLED=1 go build -o build/ceph-exporter ./cmd/ceph-exporter
+CGO_ENABLED=1 go build -tags octopus -o build/ceph-exporter ./cmd/ceph-exporter
 
 # 运行测试
-CGO_ENABLED=1 go test -v ./internal/...
+CGO_ENABLED=1 go test -tags octopus -v ./internal/...
 
 # 测试覆盖率
 go test -coverprofile=coverage.out ./internal/...

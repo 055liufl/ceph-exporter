@@ -1,0 +1,89 @@
+# =============================================================================
+# Pre-commit 钩子配置文件（简化版）
+# =============================================================================
+#
+# 【文件用途】
+#   这是 .pre-commit-config.yaml 的简化替代版本。
+#   使用 dnephin/pre-commit-golang 社区仓库提供的现成 Go 钩子，
+#   配置更简洁，但灵活性不如完整版。
+#
+# 【使用方法】
+#   1. 将本文件重命名为 .pre-commit-config.yaml 替换完整版配置
+#   2. 安装 pre-commit: pip install pre-commit
+#   3. 启用钩子:        pre-commit install
+#   4. 手动运行全部检查: pre-commit run --all-files
+#
+# 【与完整版的区别】
+#   - 完整版使用本地 bash 命令调用 Go 工具（更灵活，可自定义参数）
+#   - 简化版使用 dnephin/pre-commit-golang 社区仓库（配置更简洁）
+#   - 简化版额外包含 go-mod-tidy 和 go-test 钩子
+#   - 简化版不包含通用文件检查（如 trailing-whitespace、check-yaml 等）
+#
+# 【项目结构说明】
+#   Go 代码位于 ceph-exporter 子目录中，因此需要通过 files 参数限定范围
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 仓库与钩子定义
+# -----------------------------------------------------------------------------
+repos:
+  # ---------------------------------------------------------------------------
+  # Go 格式化和检查（社区仓库）
+  # ---------------------------------------------------------------------------
+  # dnephin/pre-commit-golang 提供了预封装的 Go 工具钩子
+  - repo: https://github.com/dnephin/pre-commit-golang     # Go 专用 pre-commit 钩子社区仓库
+    rev: v0.5.1                                             # 锁定版本号
+    hooks:
+      # Go 代码格式化（gofmt -s 简化并格式化代码）
+      - id: go-fmt                                          # Go 格式化钩子
+        args: ['-s']                                        # -s 参数：简化代码（去除不必要的类型转换等）
+        files: ^ceph-exporter/.*\.go$                       # 只对 ceph-exporter 目录下的 Go 文件生效
+
+      # Go import 排序（按本地包前缀分组）
+      - id: go-imports                                      # import 语句排序与整理钩子
+        args: ['-local', 'ceph-exporter']                   # -local 指定本地包前缀，import 会按标准库/第三方/本地分组
+        files: ^ceph-exporter/.*\.go$                       # 只对 Go 文件生效
+
+      # Go 静态分析（检查代码中的可疑构造）
+      - id: go-vet                                          # Go 内置静态分析工具
+        args: ['./ceph-exporter/...']                       # 分析 ceph-exporter 目录下的所有包
+        pass_filenames: false                               # 不传递文件名（由 go vet 自行遍历包）
+
+      # 整理 Go 模块依赖（自动清理未使用的依赖）
+      - id: go-mod-tidy                                     # go mod tidy 钩子
+        files: ^ceph-exporter/go\.(mod|sum)$                # 只在 go.mod 或 go.sum 变更时触发
+
+  # ---------------------------------------------------------------------------
+  # 本地自定义钩子
+  # ---------------------------------------------------------------------------
+  - repo: local                                             # 使用本地命令
+    hooks:
+      # 综合代码检查工具（集成数十种 Go linter）
+      - id: golangci-lint                                   # golangci-lint 综合检查钩子
+        name: golangci-lint                                 # 显示名称
+        entry: bash -c 'cd ceph-exporter && golangci-lint run --config ../.golangci.yml --timeout 5m'  # 切换到子目录运行，使用项目根目录的 lint 配置，超时 5 分钟
+        language: system                                    # 使用系统已安装的工具
+        files: ^ceph-exporter/.*\.go$                       # 只对 Go 文件生效
+        pass_filenames: false                               # 不传递文件名
+
+      # 运行 Go 单元测试
+      - id: go-test                                         # Go 测试钩子
+        name: go test                                       # 显示名称
+        entry: bash -c 'cd ceph-exporter && CGO_ENABLED=1 go test -v -count=1 ./internal/...'  # CGO_ENABLED=1 启用 CGO（Ceph 绑定需要）；-v 详细输出；-count=1 禁用测试缓存
+        language: system                                    # 使用系统已安装的工具
+        pass_filenames: false                               # 不传递文件名
+        always_run: false                                   # 仅在 Go 文件变更时运行（而非每次提交都运行）
+
+# -----------------------------------------------------------------------------
+# 全局排除规则
+# -----------------------------------------------------------------------------
+# 以下文件/目录不会被任何 hook 检查（使用正则表达式）
+exclude: |
+  (?x)^(
+    vendor/|                          # 第三方依赖目录
+    .*\.pb\.go$|                      # Protocol Buffers 生成的文件
+    .*_generated\.go$|                # 代码生成器生成的文件
+    build/|                           # 构建输出目录
+    .git/|                            # Git 内部目录
+    ceph_exporter/                    # 旧版目录（已弃用）
+  )$

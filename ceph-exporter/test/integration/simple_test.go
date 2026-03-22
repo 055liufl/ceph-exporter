@@ -1,3 +1,21 @@
+// =============================================================================
+// 服务可用性简单测试
+// =============================================================================
+// 测试各个服务的 HTTP 端点是否可访问。
+// 这是一个轻量级测试，不需要 docker-compose 启动环境，
+// 适用于验证已经运行的服务是否正常。
+//
+// 测试的服务:
+//   - ceph-exporter: 端口 9128，/health 端点
+//   - Prometheus: 端口 9090，/-/healthy 端点
+//   - Grafana: 端口 3000，/api/health 端点
+//   - Alertmanager: 端口 9093，/-/healthy 端点
+//
+// 注意:
+//
+//	如果服务未运行，测试会被跳过（Skip）而不是失败
+//
+// =============================================================================
 package integration
 
 import (
@@ -8,8 +26,9 @@ import (
 	"time"
 )
 
-// TestServicesRunning tests if services are accessible
-// This is a simplified test that doesn't require docker-compose
+// TestServicesRunning 测试各服务是否可访问
+// 使用 table-driven tests 遍历所有服务端点，
+// 验证 HTTP 响应中包含预期的字符串
 func TestServicesRunning(t *testing.T) {
 	// Get Docker host
 	host := getDockerHost()

@@ -3,7 +3,7 @@
 # ceph-exporter 部署脚本
 # =============================================================================
 # 自动检查环境、配置镜像加速、分阶段部署所有组件
-# 适用环境: CentOS 7 + Docker
+# 适用环境: Ubuntu 20.04 + Docker
 # =============================================================================
 
 set -euo pipefail
@@ -56,15 +56,14 @@ check_root() {
 check_os() {
     log_step "检查操作系统..."
 
-    if [ -f /etc/centos-release ]; then
-        local version=$(cat /etc/centos-release | grep -oP '(?<=release )\d+')
-        log_info "检测到 CentOS $version"
-
-        if [ "$version" != "7" ]; then
-            log_warn "此脚本针对 CentOS 7 优化，当前版本: $version"
+    if [ -f /etc/os-release ]; then
+        source /etc/os-release
+        log_info "检测到 $PRETTY_NAME"
+        if [[ "$ID" != "ubuntu" ]] || [[ "$VERSION_ID" != "20.04" ]]; then
+            log_warn "此脚本针对 Ubuntu 20.04 优化，当前系统: $PRETTY_NAME"
         fi
     else
-        log_warn "未检测到 CentOS 系统"
+        log_warn "未检测到系统版本信息"
     fi
 }
 
@@ -74,14 +73,12 @@ check_docker() {
 
     if ! command -v docker &> /dev/null; then
         log_error "Docker 未安装"
-        log_info "请运行以下命令安装 Docker:"
-        echo ""
-        echo "  sudo yum install -y yum-utils"
-        echo "  sudo yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo"
-        echo "  sudo yum install -y docker-ce docker-ce-cli containerd.io"
-        echo "  sudo systemctl start docker"
-        echo "  sudo systemctl enable docker"
-        echo ""
+        log_info "请执行以下命令安装 Docker:"
+        echo "  sudo apt-get update"
+        echo "  sudo apt-get install -y ca-certificates curl gnupg"
+        echo "  sudo install -m 0755 -d /etc/apt/keyrings"
+        echo "  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+        echo "  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
         exit 1
     fi
 
@@ -100,22 +97,15 @@ check_docker() {
 check_docker_compose() {
     log_step "检查 Docker Compose 安装..."
 
-    if command -v docker-compose &> /dev/null; then
-        COMPOSE_CMD="docker-compose"
-        local compose_version=$(docker-compose --version | grep -oP '\d+\.\d+\.\d+' | head -1)
-        log_info "Docker Compose 版本: $compose_version"
-    elif docker compose version &> /dev/null; then
+    if docker compose version &> /dev/null; then
         COMPOSE_CMD="docker compose"
-        local compose_version=$(docker compose version | grep -oP '\d+\.\d+\.\d+' | head -1)
-        log_info "Docker Compose 版本: $compose_version (v2)"
+        log_info "Docker Compose 插件已安装: $(docker compose version)"
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
+        log_warn "检测到旧版 docker-compose，建议升级到 Docker Compose 插件"
     else
         log_error "Docker Compose 未安装"
-        log_info "请运行以下命令安装 Docker Compose:"
-        echo ""
-        echo "  sudo curl -L \"https://get.daocloud.io/docker/compose/releases/download/v2.24.0/docker-compose-\$(uname -s)-\$(uname -m)\" -o /usr/local/bin/docker-compose"
-        echo "  sudo chmod +x /usr/local/bin/docker-compose"
-        echo "  sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose"
-        echo ""
+        log_info "请执行: sudo apt-get install -y docker-compose-plugin"
         exit 1
     fi
 }
@@ -156,53 +146,23 @@ check_resources() {
 check_firewall() {
     log_step "检查防火墙状态..."
 
-    if sudo systemctl is-active --quiet firewalld; then
-        log_warn "防火墙已启用"
-        log_info "需要开放以下端口: 9128, 9090, 3000, 9093, 9200, 5601, 16686"
-
-        read -p "是否自动配置防火墙规则? (y/N): " configure_fw
-        if [[ "$configure_fw" == "y" || "$configure_fw" == "Y" ]]; then
-            configure_firewall
-        else
-            log_info "请手动配置防火墙或临时关闭: sudo systemctl stop firewalld"
-        fi
-    else
-        log_info "防火墙未启用"
-    fi
-}
-
-# 配置防火墙
-configure_firewall() {
-    log_step "配置防火墙规则..."
-
     local ports=(9128 9090 3000 9093 9200 5601 16686 8080)
 
-    for port in "${ports[@]}"; do
-        sudo firewall-cmd --permanent --add-port=${port}/tcp
-        log_info "已开放端口: $port"
-    done
-
-    sudo firewall-cmd --reload
-    log_info "防火墙规则已重新加载"
+    if command -v ufw &> /dev/null; then
+        log_info "配置 UFW 防火墙规则..."
+        for port in "${ports[@]}"; do
+            sudo ufw allow "$port"/tcp comment "ceph-exporter" 2>/dev/null || true
+        done
+        log_info "防火墙规则配置完成"
+    else
+        log_info "未检测到 UFW，跳过防火墙配置"
+    fi
 }
 
 # 检查 SELinux
 check_selinux() {
-    log_step "检查 SELinux 状态..."
-
-    local selinux_status=$(getenforce 2>/dev/null || echo "Disabled")
-    log_info "SELinux 状态: $selinux_status"
-
-    if [ "$selinux_status" == "Enforcing" ]; then
-        log_warn "SELinux 处于强制模式，可能影响 Docker 容器运行"
-
-        read -p "是否临时禁用 SELinux? (y/N): " disable_selinux
-        if [[ "$disable_selinux" == "y" || "$disable_selinux" == "Y" ]]; then
-            sudo setenforce 0
-            log_info "SELinux 已临时禁用"
-            log_warn "重启后将恢复，如需永久禁用请编辑 /etc/selinux/config"
-        fi
-    fi
+    # Ubuntu 20.04 使用 AppArmor，无需 SELinux 配置
+    log_info "跳过 SELinux 检查 (Ubuntu 使用 AppArmor)"
 }
 
 # 配置 Docker 镜像加速
@@ -386,6 +346,16 @@ deploy_full() {
     [ -d "data/prometheus" ] && sudo chown -R 65534:65534 data/prometheus 2>/dev/null || true
     [ -d "data/grafana" ] && sudo chown -R 472:472 data/grafana 2>/dev/null || true
     [ -d "data/ceph-demo/config" ] && sudo chmod -R 755 data/ceph-demo/config 2>/dev/null || true
+
+    cd "$DEPLOY_DIR"
+
+    # 构建 ceph-exporter:dev 镜像
+    log_info "构建 ceph-exporter:dev 镜像..."
+    cd "$PROJECT_DIR"
+    docker build -t ceph-exporter:dev -f Dockerfile . || {
+        log_error "构建 ceph-exporter:dev 镜像失败"
+        exit 1
+    }
 
     cd "$DEPLOY_DIR"
 
@@ -634,6 +604,7 @@ verify_deployment() {
         "ceph-exporter:9128/health"
         "prometheus:9090/-/healthy"
         "grafana:3000/api/health"
+        "alertmanager:9093/-/healthy"
     )
 
     # 检查是否部署了完整栈
@@ -676,7 +647,7 @@ verify_deployment() {
 
     # 验证时区配置
     log_info "验证容器时区配置..."
-    if docker ps --format '{{.Names}}' | grep -q \"ceph-exporter\"; then
+    if docker ps --format '{{.Names}}' | grep -q "ceph-exporter"; then
         local host_tz=$(date +"%Z %z")
         local container_tz=$(docker exec ceph-exporter date +"%Z %z" 2>/dev/null || echo "无法获取")
         if [ "$host_tz" = "$container_tz" ]; then
@@ -695,7 +666,7 @@ stop_services() {
     cd "$DEPLOY_DIR"
 
     # 检测并停止所有可能运行的 compose 配置
-    for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml; do
+    for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml docker-compose-ceph-demo.yml; do
         if [ -f "$compose_file" ]; then
             ${COMPOSE_CMD} -f "$compose_file" down 2>/dev/null || true
         fi
@@ -718,7 +689,7 @@ clean_data() {
     cd "$DEPLOY_DIR"
 
     # 停止所有服务
-    for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml; do
+    for compose_file in docker-compose.yml docker-compose-integration-test.yml docker-compose-lightweight-full.yml docker-compose-ceph-demo.yml; do
         if [ -f "$compose_file" ]; then
             ${COMPOSE_CMD} -f "$compose_file" down 2>/dev/null || true
         fi
@@ -814,7 +785,7 @@ show_help() {
 
 故障排查:
   如果遇到部署问题，请查看:
-  - 故障排查指南: cat ../TROUBLESHOOTING.md
+  - 故障排查指南: cat TROUBLESHOOTING.md
   - 运行修复脚本: ./deploy.sh fix
   - 查看服务日志: ./deploy.sh logs <service-name>
 EOF

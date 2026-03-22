@@ -56,7 +56,7 @@ Alertmanager 是 Prometheus 生态系统中的告警管理组件，负责处理 
 ### 访问 Alertmanager
 
 
-**访问地址**: http://192.168.75.129:9093 (根据你的截图)
+**访问地址**: http://localhost:9093
 
 **默认端口**: 9093
 
@@ -66,14 +66,14 @@ Alertmanager 是 Prometheus 生态系统中的告警管理组件，负责处理 
 
 ```bash
 # 启动完整监控栈（包含 Alertmanager）
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
-sudo docker-compose -f docker-compose-lightweight-full.yml up -d
+cd ceph-exporter/deployments
+docker compose -f docker-compose-lightweight-full.yml up -d
 
 # 查看 Alertmanager 状态
-sudo docker-compose -f docker-compose-lightweight-full.yml ps alertmanager
+docker compose -f docker-compose-lightweight-full.yml ps alertmanager
 
 # 查看 Alertmanager 日志
-sudo docker-compose -f docker-compose-lightweight-full.yml logs -f alertmanager
+docker compose -f docker-compose-lightweight-full.yml logs -f alertmanager
 ```
 
 ### 验证服务
@@ -95,7 +95,7 @@ curl http://localhost:9093/api/v2/status
 
 ### 主界面布局
 
-根据你的截图，Alertmanager 界面包含以下部分：
+根据 Alertmanager 界面，包含以下部分：
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -175,7 +175,7 @@ curl http://localhost:9093/api/v2/status
 
 ### 当前配置的告警规则
 
-本项目配置了 **15 个告警规则**，覆盖 Ceph 集群的各个方面：
+本项目配置了 **16 个告警规则**，覆盖 Ceph 集群的各个方面：
 
 #### 1. 集群健康状态告警
 
@@ -184,7 +184,7 @@ curl http://localhost:9093/api/v2/status
 | CephClusterWarning | `ceph_health_status == 1` | 5分钟 | warning | 集群处于 HEALTH_WARN 状态 |
 | CephClusterError | `ceph_health_status == 2` | 1分钟 | critical | 集群处于 HEALTH_ERR 状态 |
 
-**示例**: 你的截图中没有显示集群健康告警，说明集群状态正常。
+**示例**: 集群状态正常时不会显示集群健康告警。
 
 #### 2. OSD 告警
 
@@ -196,7 +196,7 @@ curl http://localhost:9093/api/v2/status
 | CephOSDHighLatency | `ceph_osd_apply_latency_ms > 500` | 5分钟 | warning | OSD 写入延迟超过 500ms |
 | CephMultipleOSDDown | `(down/total) > 0.1` | 2分钟 | critical | 超过 10% OSD 宕机 |
 
-**示例**: 你的截图显示：
+**示例**: 当 OSD 出现问题时，可能看到：
 - `alertname="CephOSDDown" osd="osd.0"` - OSD 0 已宕机
 - `alertname="CephOSDOut" osd="osd.0"` - OSD 0 被踢出集群
 
@@ -222,7 +222,7 @@ curl http://localhost:9093/api/v2/status
 | CephMonitorOutOfQuorum | `ceph_monitor_in_quorum == 0` | 2分钟 | critical | Monitor 脱离 quorum |
 | CephMonitorClockSkew | 时钟偏差 > 0.5秒 | 5分钟 | warning | Monitor 时钟不同步 |
 
-**示例**: 你的截图显示：
+**示例**: 当 OSD 出现问题时，可能看到：
 - `alertname="CephMonitorOutOfQuorum" component="monitor"` - 有 Monitor 脱离了 quorum
 
 #### 6. 服务可用性告警
@@ -240,10 +240,10 @@ curl http://localhost:9093/api/v2/status
 
 ```bash
 # Alertmanager 配置文件
-/home/lfl/ceph-exporter/ceph-exporter/deployments/alertmanager/alertmanager.zh-CN.yml
+ceph-exporter/deployments/alertmanager/alertmanager.yml
 
 # 告警规则文件
-/home/lfl/ceph-exporter/ceph-exporter/deployments/prometheus/alert_rules.zh-CN.yml
+ceph-exporter/deployments/prometheus/alert_rules.yml
 ```
 
 ### 1. 配置 Webhook 通知（推荐）
@@ -282,7 +282,7 @@ receivers:
 
 ### 2. 配置邮件通知
 
-编辑 `alertmanager.zh-CN.yml`:
+编辑 `alertmanager.yml`:
 
 ```yaml
 global:
@@ -362,8 +362,8 @@ inhibit_rules:
 curl -X POST http://localhost:9093/-/reload
 
 # 方法 2: 重启容器
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
-sudo docker-compose -f docker-compose-lightweight-full.yml restart alertmanager
+cd ceph-exporter/deployments
+docker compose -f docker-compose-lightweight-full.yml restart alertmanager
 
 # 验证配置
 curl http://localhost:9093/api/v2/status | jq .
@@ -376,7 +376,7 @@ curl http://localhost:9093/api/v2/status | jq .
 ### 1. 查看当前告警
 
 **Web 界面**:
-1. 访问 http://192.168.75.129:9093
+1. 访问 http://localhost:9093
 2. 点击 **Alerts** 标签
 3. 查看告警列表
 
@@ -502,12 +502,12 @@ curl -s http://localhost:9090/api/v1/rules | jq .
 curl -s http://localhost:9090/api/v1/alerts | jq .
 
 # 4. 检查 Alertmanager 日志
-sudo docker-compose -f docker-compose-lightweight-full.yml logs alertmanager
+docker compose -f docker-compose-lightweight-full.yml logs alertmanager
 ```
 
 **解决方案**:
 
-检查 Prometheus 配置文件 `prometheus.zh-CN.yml`:
+检查 Prometheus 配置文件 `prometheus.yml`:
 ```yaml
 alerting:
   alertmanagers:
@@ -580,7 +580,7 @@ curl -s http://localhost:9093/api/v2/status | jq .config.inhibit_rules
 
 **解决方案**:
 
-调整 `alertmanager.zh-CN.yml` 的分组配置：
+调整 `alertmanager.yml` 的分组配置：
 ```yaml
 route:
   group_by: ["alertname", "component"]  # 按告警名称和组件分组
@@ -588,6 +588,26 @@ route:
   group_interval: 5m    # 同组告警间隔 5 分钟
   repeat_interval: 4h   # 重复通知间隔 4 小时
 ```
+
+### 问题 6: 告警时间显示为 UTC，与本地时区不一致
+
+**原因**: Alertmanager 内部使用 UTC 时间存储和显示所有时间戳，这是设计决定，无法通过配置更改。
+
+**解决方案**:
+
+1. **使用 Grafana 查看告警（推荐）**: Grafana 自动将 UTC 时间转换为本地时区
+   - 访问 http://localhost:3000 → Alerting → Alert rules
+
+2. **自定义通知模板**: 在告警消息中显示本地时间
+   ```go
+   {{ define "custom.text" }}
+   触发时间: {{ .StartsAt.Add 28800000000000 | date "2006-01-02 15:04:05" }} (CST)
+   {{ end }}
+   ```
+
+3. **Webhook 接收器中转换**: 在自定义 Webhook 中将 UTC 时间加 8 小时转为 CST
+
+> 挂载 `/etc/localtime` 只影响容器内 `date` 命令输出，不影响 Alertmanager 应用本身的时间显示。
 
 ---
 
@@ -771,16 +791,16 @@ POST http://localhost:9093/-/reload
 **常用命令**:
 ```bash
 # 启动服务
-sudo docker-compose -f docker-compose-lightweight-full.yml up -d alertmanager
+docker compose -f docker-compose-lightweight-full.yml up -d alertmanager
 
 # 停止服务
-sudo docker-compose -f docker-compose-lightweight-full.yml stop alertmanager
+docker compose -f docker-compose-lightweight-full.yml stop alertmanager
 
 # 重启服务
-sudo docker-compose -f docker-compose-lightweight-full.yml restart alertmanager
+docker compose -f docker-compose-lightweight-full.yml restart alertmanager
 
 # 查看日志
-sudo docker-compose -f docker-compose-lightweight-full.yml logs -f alertmanager
+docker compose -f docker-compose-lightweight-full.yml logs -f alertmanager
 
 # 进入容器
 sudo docker exec -it alertmanager sh
@@ -791,8 +811,7 @@ docker exec alertmanager amtool check-config /etc/alertmanager/alertmanager.yml
 
 ### B. 相关文档
 
-- **Prometheus 使用指南**: `/home/lfl/ceph-exporter/Prometheus使用指南.md`
-- **Ceph-Exporter 完整操作指南**: `/home/lfl/ceph-exporter/Ceph-Exporter项目完整操作指南.md`
+- **Ceph-Exporter 完整操作指南**: `Ceph-Exporter项目完整操作指南.md`
 - **官方文档**: https://prometheus.io/docs/alerting/latest/alertmanager/
 
 ---

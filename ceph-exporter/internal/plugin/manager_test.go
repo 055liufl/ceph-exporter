@@ -1,6 +1,22 @@
 // =============================================================================
 // 插件管理器单元测试（Phase 5 完整实现）
 // =============================================================================
+// 测试插件管理器的完整生命周期管理功能，包括:
+//   - 管理器创建和初始化
+//   - 插件注册（正常注册和重复注册）
+//   - 插件注销（正常注销和不存在的插件）
+//   - 插件获取和列表
+//   - 批量启动和停止（区分启用/未启用插件）
+//   - 健康检查（健康/不健康插件）
+//   - 管理器关闭和资源释放
+//   - HTTP 插件的创建、初始化和生命周期
+//
+// 测试工具:
+//
+//	mockPlugin: 模拟插件实现，用于跟踪方法调用状态
+//	（initCalled, startCalled, stopCalled 等标志位）
+//
+// =============================================================================
 package plugin
 
 import (
@@ -13,7 +29,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// mockPlugin 模拟插件用于测试
+// mockPlugin 模拟插件，用于单元测试
+// 实现 Plugin 接口，通过标志位跟踪各方法的调用状态
+//
+// 字段说明:
+//   - name: 插件名称
+//   - version: 插件版本
+//   - description: 插件描述
+//   - initCalled: Init 方法是否被调用
+//   - startCalled: Start 方法是否被调用
+//   - stopCalled: Stop 方法是否被调用
+//   - healthErr: Health 方法返回的错误（nil 表示健康）
 type mockPlugin struct {
 	name        string
 	version     string
@@ -24,6 +50,11 @@ type mockPlugin struct {
 	healthErr   error
 }
 
+// newMockPlugin 创建模拟插件实例
+// 参数:
+//   - name: 插件名称
+//   - version: 插件版本
+//   - description: 插件描述
 func newMockPlugin(name, version, description string) *mockPlugin {
 	return &mockPlugin{
 		name:        name,
@@ -32,25 +63,32 @@ func newMockPlugin(name, version, description string) *mockPlugin {
 	}
 }
 
-func (p *mockPlugin) Name() string        { return p.name }
-func (p *mockPlugin) Version() string     { return p.version }
-func (p *mockPlugin) Description() string { return p.description }
+// ----- mockPlugin 接口方法实现 -----
+// 以下方法实现 Plugin 接口，用于在测试中模拟插件行为
 
+func (p *mockPlugin) Name() string        { return p.name }        // 返回插件名称
+func (p *mockPlugin) Version() string     { return p.version }     // 返回插件版本
+func (p *mockPlugin) Description() string { return p.description } // 返回插件描述
+
+// Init 模拟初始化，记录调用状态
 func (p *mockPlugin) Init(config map[string]interface{}) error {
 	p.initCalled = true
 	return nil
 }
 
+// Start 模拟启动，记录调用状态
 func (p *mockPlugin) Start(ctx context.Context) error {
 	p.startCalled = true
 	return nil
 }
 
+// Stop 模拟停止，记录调用状态
 func (p *mockPlugin) Stop() error {
 	p.stopCalled = true
 	return nil
 }
 
+// Health 模拟健康检查，返回预设的错误（nil 表示健康）
 func (p *mockPlugin) Health() error {
 	return p.healthErr
 }
@@ -217,7 +255,10 @@ func TestManager_List(t *testing.T) {
 	}
 }
 
-// TestManager_StartAll 测试启动所有插件
+// TestManager_StartAll 测试批量启动插件
+// 验证:
+//   - 已启用的插件会被初始化和启动（initCalled=true, startCalled=true）
+//   - 未启用的插件不会被初始化和启动（initCalled=false, startCalled=false）
 func TestManager_StartAll(t *testing.T) {
 	logger := logrus.New()
 	registry := prometheus.NewRegistry()
@@ -309,7 +350,11 @@ func TestManager_StopAll(t *testing.T) {
 	}
 }
 
-// TestManager_HealthCheck 测试健康检查
+// TestManager_HealthCheck 测试插件健康检查
+// 验证:
+//   - 健康的插件不会出现在不健康列表中
+//   - 不健康的插件会出现在不健康列表中
+//   - 返回的 map 中 key 为插件名称，value 为错误信息
 func TestManager_HealthCheck(t *testing.T) {
 	logger := logrus.New()
 	registry := prometheus.NewRegistry()
@@ -401,7 +446,11 @@ func TestManager_Close(t *testing.T) {
 	}
 }
 
-// TestHTTPPlugin 测试 HTTP 插件
+// TestHTTPPlugin 测试 HTTP 远程插件的完整生命周期
+// 验证:
+//   - 基本属性（Name, Version, Description）
+//   - Init 方法正确解析 endpoint、timeout、headers 配置
+//   - Start 和 Stop 方法正常工作
 func TestHTTPPlugin(t *testing.T) {
 	plugin := NewHTTPPlugin("http-storage", "v1.0.0", "HTTP storage plugin")
 

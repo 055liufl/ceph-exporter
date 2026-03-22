@@ -140,7 +140,7 @@ ls -l /etc/localtime /etc/timezone
 sudo timedatectl set-timezone Asia/Shanghai
 
 # 3. 重启容器
-docker-compose restart
+docker compose restart
 ```
 
 ### 问题 2: 时区文件不存在
@@ -149,7 +149,7 @@ docker-compose restart
 
 **解决方案**:
 ```bash
-# CentOS 7 设置时区
+# Ubuntu 20.04 设置时区
 sudo timedatectl set-timezone Asia/Shanghai
 
 # 验证时区文件
@@ -223,7 +223,7 @@ timedatectl
 
 # 3. 重启容器以应用新时区
 cd ceph-exporter/deployments
-docker-compose restart
+docker compose restart
 
 # 4. 验证容器时区
 ./scripts/deploy.sh verify
@@ -260,7 +260,7 @@ docker-compose restart
 
 ## 📚 相关文档
 
-- **DEPLOYMENT_GUIDE.md** - 完整部署指南
+- **Ceph-Exporter项目完整操作指南.md** - 完整操作指南
 - **README.md** - 部署目录说明
 - **TROUBLESHOOTING.md** - 故障排查指南
 

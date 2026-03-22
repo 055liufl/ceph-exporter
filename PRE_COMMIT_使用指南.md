@@ -1,7 +1,7 @@
 # Pre-commit 使用指南
 
 **最后更新**: 2026-03-21
-**适用环境**: CentOS 7 + Python
+**适用环境**: Ubuntu 20.04 + Python
 
 ---
 
@@ -151,15 +151,52 @@ git commit --no-verify -m "message"
 **错误信息**:
 ```
 SSL: CERTIFICATE_VERIFY_FAILED
+URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED]>
 ```
 
 **解决方案**:
+
 ```bash
-# 使用自动修复脚本
+# 方法 1: 使用自动修复脚本（推荐）
 ./scripts/fix-precommit.sh
 
-# 或查看详细指南
-cat PRE_COMMIT_SSL_FIX.md
+# 方法 2: 手动配置 pip 镜像源
+mkdir -p ~/.pip
+cat > ~/.pip/pip.conf << 'CONF'
+[global]
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+trusted-host = pypi.tuna.tsinghua.edu.cn
+
+[install]
+trusted-host = pypi.tuna.tsinghua.edu.cn
+CONF
+
+# 方法 3: 清理缓存后重试
+pre-commit clean
+pip cache purge
+pip uninstall pre-commit
+pip install pre-commit
+pre-commit install --install-hooks
+```
+
+**可用的 pip 镜像源**（如果清华源不可用）:
+
+| 镜像源 | index-url |
+|--------|-----------|
+| 清华大学（推荐） | `https://pypi.tuna.tsinghua.edu.cn/simple` |
+| 阿里云 | `https://mirrors.aliyun.com/pypi/simple/` |
+| 中科大 | `https://pypi.mirrors.ustc.edu.cn/simple/` |
+| 豆瓣 | `https://pypi.douban.com/simple/` |
+
+**Windows 用户**:
+```powershell
+New-Item -Path "$env:APPDATA\pip" -ItemType Directory -Force
+@"
+[global]
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+trusted-host = pypi.tuna.tsinghua.edu.cn
+"@ | Out-File -FilePath "$env:APPDATA\pip\pip.ini" -Encoding ASCII
+pip config list
 ```
 
 ### Q2: 下载速度很慢
@@ -212,7 +249,7 @@ make fmt  # 格式化代码
 make lint # 查看具体问题
 ```
 
-### Q4: Pre-commit 未安装
+### Q5: Pre-commit 未安装
 
 **解决方案**:
 ```bash
@@ -344,7 +381,6 @@ make test
 
 ## 📚 相关文档
 
-- **PRE_COMMIT_SSL_FIX.md** - SSL 问题详细解决指南
 - **scripts/fix-precommit.sh** - 自动修复脚本
 - **scripts/fix-precommit.sh.zh-CN** - 脚本详细注释版本
 - **README.md** - 项目主文档
@@ -357,13 +393,7 @@ make test
 ### 遇到问题时
 
 ```bash
-# 1. 查看 SSL 问题指南
-cat PRE_COMMIT_SSL_FIX.md
-
-# 2. 运行自动修复脚本
-./scripts/fix-precommit.sh
-
-# 3. 查看详细错误
+# 1. 查看详细错误
 pre-commit run --verbose --all-files
 
 # 4. 清理缓存重试

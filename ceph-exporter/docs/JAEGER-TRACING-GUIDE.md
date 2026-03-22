@@ -96,14 +96,14 @@ tracer:
 
 ```bash
 cd deployments
-docker-compose -f docker-compose-lightweight-full.yml up -d jaeger
+docker compose -f docker-compose-lightweight-full.yml up -d jaeger
 ```
 
 #### 步骤 3: 重新构建并启动 ceph-exporter
 
 ```bash
 docker build -t ceph-exporter:dev -f Dockerfile ..
-docker-compose -f docker-compose-lightweight-full.yml up -d ceph-exporter
+docker compose -f docker-compose-lightweight-full.yml up -d ceph-exporter
 ```
 
 #### 步骤 4: 生成追踪数据
@@ -339,7 +339,7 @@ Tags: http.status_code >= 400
 
 4. ✅ ceph-exporter 是否重启？
    ```bash
-   docker-compose restart ceph-exporter
+   docker compose restart ceph-exporter
    ```
 
 5. ✅ 查看 ceph-exporter 日志

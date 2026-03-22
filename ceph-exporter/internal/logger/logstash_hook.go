@@ -14,7 +14,7 @@
 //
 // 使用示例:
 //
-//	hook, err := NewLogstashHook("tcp", "logstash:5044", "ceph-exporter")
+//	hook, err := NewLogstashHook("tcp", "logstash:5000", "ceph-exporter")
 //	if err != nil {
 //	    return err
 //	}

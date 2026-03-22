@@ -43,7 +43,7 @@ sudo ./scripts/deploy.sh init
 
 # 方法 2: 手动修复权限
 sudo chown -R 65534:65534 data/prometheus
-docker-compose restart prometheus
+docker compose restart prometheus
 
 # 验证修复
 docker logs prometheus --tail 20
@@ -80,7 +80,7 @@ docker logs ceph-demo --tail 50
 sudo chmod 644 data/ceph-demo/config/ceph.client.admin.keyring
 
 # 4. 重启 ceph-exporter
-docker-compose restart ceph-exporter
+docker compose restart ceph-exporter
 
 # 5. 验证连接
 docker logs ceph-exporter --tail 20
@@ -104,7 +104,7 @@ mkdir: cannot create directory '/var/lib/grafana/plugins': Permission denied
 ```bash
 # 修复权限
 sudo chown -R 472:472 data/grafana
-docker-compose restart grafana
+docker compose restart grafana
 
 # 验证
 curl http://localhost:3000/api/health
@@ -133,7 +133,7 @@ echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
 # 重启 Elasticsearch
-docker-compose restart elasticsearch
+docker compose restart elasticsearch
 ```
 
 ---
@@ -174,7 +174,7 @@ sudo chown -R 1000:1000 data/elasticsearch
 sudo chown -R $USER:$USER data/alertmanager
 
 # 重启所有服务
-docker-compose restart
+docker compose restart
 ```
 
 ---
@@ -206,7 +206,7 @@ ln -s ../configs configs
 ls -la configs/ceph-exporter.yaml
 
 # 重启服务
-docker-compose restart ceph-exporter
+docker compose restart ceph-exporter
 ```
 
 ---
@@ -234,7 +234,7 @@ docker logs ceph-demo --tail 50
 ls -la data/ceph-demo/config/
 
 # 4. 重启 ceph-exporter
-docker-compose restart ceph-exporter
+docker compose restart ceph-exporter
 ```
 
 ---
@@ -280,8 +280,8 @@ docker network inspect deployments_ceph-network
 docker exec ceph-exporter ping ceph-demo
 
 # 重建网络
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 ---
@@ -308,7 +308,7 @@ free -h
 # 解决方法:
 # 1. 增加系统内存
 # 2. 减少运行的服务数量
-# 3. 调整 docker-compose.yml 中的 mem_limit
+# 3. 调整 docker-compose.yml 中的 deploy.resources.limits.memory
 ```
 
 ---
@@ -412,7 +412,7 @@ docker --version
 sudo systemctl status docker
 
 # 检查 Docker Compose
-docker-compose --version
+docker compose version
 
 # 检查系统资源
 free -h
@@ -453,13 +453,13 @@ ls -la data/ceph-demo/config/
 
 ```bash
 # 重启单个服务
-docker-compose restart <service-name>
+docker compose restart <service-name>
 
 # 重启所有服务
-docker-compose restart
+docker compose restart
 
 # 完全重新部署
-docker-compose down
+docker compose down
 sudo ./scripts/deploy.sh full
 ```
 
@@ -472,7 +472,7 @@ sudo ./scripts/deploy.sh full
 1. **收集诊断信息**:
 ```bash
 # 运行统一诊断脚本
-cd /home/lfl/ceph-exporter/ceph-exporter/deployments
+cd ceph-exporter/deployments
 sudo ./scripts/diagnose.sh > diagnosis.log 2>&1
 
 # 或通过 deploy.sh
@@ -487,9 +487,8 @@ docker logs ceph-demo > ceph-demo.log 2>&1
 
 2. **查看文档**:
    - [部署目录 README](README.md)
-   - [Docker Compose 配置说明](README-zh-CN.md)
+   - [Docker Compose 配置说明](README.md)
    - [数据存储说明](DATA_STORAGE.md)
-   - [诊断脚本整合说明](docs/DIAGNOSE_INTEGRATION.md)
 
 3. **提交 Issue**: 附上诊断日志和错误信息
 
@@ -512,7 +511,7 @@ sudo ./scripts/deploy.sh verify
 
 # 4. 检查所有服务状态
 docker ps
-docker-compose ps
+docker compose ps
 ```
 
 ### 定期维护
@@ -522,14 +521,14 @@ docker-compose ps
 du -sh data/*
 
 # 清理旧日志
-docker-compose logs --tail 0
+docker compose logs --tail 0
 
 # 备份数据
 tar -czf backup-$(date +%Y%m%d).tar.gz data/
 
 # 更新镜像
-docker-compose pull
-docker-compose up -d
+docker compose pull
+docker compose up -d
 ```
 
 ---

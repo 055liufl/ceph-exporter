@@ -1,0 +1,163 @@
+# =============================================================================
+# Docker Compose 配置示例 - ELK 日志集成部署
+# =============================================================================
+#
+# 【文件用途】
+#   演示 ceph-exporter 与 ELK（Elasticsearch + Logstash + Kibana）日志栈的
+#   集成部署方案。本文件包含两种日志推送方案的完整配置，可根据需求选择。
+#
+# 【使用方法】
+#   1. 根据需求选择方案 1（直接推送）或方案 2（Filebeat sidecar）
+#   2. 准备对应的配置文件（ceph-exporter.yaml、logstash.conf 等）
+#   3. 运行: docker compose -f docker-compose-elk.yaml up -d
+#
+# 【两种日志集成方案】
+#   方案 1 - 直接推送（ceph-exporter-direct）:
+#     ceph-exporter --TCP/UDP--> Logstash --> Elasticsearch --> Kibana
+#     优点：架构简单，无需额外组件
+#     缺点：应用与 ELK 耦合，Logstash 故障时可能影响应用
+#
+#   方案 2 - Filebeat Sidecar（ceph-exporter-sidecar + filebeat-sidecar）:
+#     ceph-exporter --stdout--> Docker 日志 --> Filebeat --> Logstash --> ES
+#     优点：应用与日志收集解耦，更可靠
+#     缺点：需要额外部署 Filebeat 容器
+#
+# 【网络架构】
+#   所有服务连接到同一个 elk 桥接网络，通过服务名互相访问
+# =============================================================================
+
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 服务定义
+# -----------------------------------------------------------------------------
+services:
+  # ---------------------------------------------------------------------------
+  # 方案 1: 直接推送到 Logstash
+  # ceph-exporter 直接通过 TCP/UDP 推送日志到 Logstash
+  # ---------------------------------------------------------------------------
+  # 应用内置 Logstash 客户端，日志在应用进程内直接发送到 Logstash
+  ceph-exporter-direct:
+    image: ceph-exporter:latest                            # 使用最新版 ceph-exporter 镜像
+    container_name: ceph-exporter-direct                   # 容器名称（用于 Docker 服务名解析）
+    volumes:
+      - ./configs/ceph-exporter.yaml:/app/configs/ceph-exporter.yaml  # 挂载应用配置文件
+      - /etc/ceph:/etc/ceph:ro                             # 挂载 Ceph 配置和密钥（只读，用于连接 Ceph 集群）
+    environment:
+      - LOG_LEVEL=info                                     # 日志级别环境变量
+      - LOGSTASH_URL=logstash:5044                         # Logstash 地址环境变量
+    # 配置文件中设置 enable_elk: true
+    command: ["-config", "/app/configs/ceph-exporter.yaml"] # 启动命令：指定配置文件路径
+    ports:
+      - "9128:9128"                                        # 暴露 Prometheus 指标端口（主机:容器）
+    networks:
+      - elk                                                # 连接到 elk 网络
+    depends_on:
+      - logstash                                           # 依赖 Logstash（确保 Logstash 先启动）
+
+  # ---------------------------------------------------------------------------
+  # 方案 2: 容器日志收集（推荐）
+  # ceph-exporter 输出到 stdout，由 Filebeat sidecar 采集
+  # ---------------------------------------------------------------------------
+  # 应用只输出到 stdout，日志收集交给 Filebeat 处理
+  ceph-exporter-sidecar:
+    image: ceph-exporter:latest                            # 使用最新版 ceph-exporter 镜像
+    container_name: ceph-exporter-sidecar                  # 容器名称
+    volumes:
+      - ./configs/ceph-exporter.yaml:/app/configs/ceph-exporter.yaml  # 挂载应用配置文件
+      - /etc/ceph:/etc/ceph:ro                             # 挂载 Ceph 配置和密钥（只读）
+      - ceph-logs:/var/log/ceph-exporter                   # 共享日志卷（可选，用于持久化日志文件）
+    environment:
+      - LOG_LEVEL=info                                     # 日志级别环境变量
+    # 配置文件中设置 enable_elk: false, output: stdout
+    command: ["-config", "/app/configs/ceph-exporter.yaml"] # 启动命令
+    ports:
+      - "9129:9128"                                        # 暴露指标端口（主机 9129 映射到容器 9128，避免与方案 1 端口冲突）
+    networks:
+      - elk                                                # 连接到 elk 网络
+    logging:
+      driver: "json-file"                                  # Docker 日志驱动：json-file（Filebeat 需要此格式）
+      options:
+        max-size: "10m"                                    # 单个日志文件最大 10MB（防止磁盘占满）
+        max-file: "3"                                      # 最多保留 3 个日志文件（滚动策略）
+
+  # Filebeat sidecar - 采集 ceph-exporter 的日志
+  filebeat-sidecar:
+    image: elastic/filebeat:8.11.0                         # Elastic 官方 Filebeat 镜像（版本与 ELK 栈保持一致）
+    container_name: filebeat-sidecar                       # 容器名称
+    user: root                                             # 以 root 用户运行（需要读取 Docker socket 和容器日志）
+    volumes:
+      - ./configs/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro  # 挂载 Filebeat 配置文件（只读）
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro    # 挂载 Docker 容器日志目录（只读，用于采集日志）
+      - /var/run/docker.sock:/var/run/docker.sock:ro                # 挂载 Docker socket（只读，用于获取容器元数据）
+      - filebeat-data:/usr/share/filebeat/data             # Filebeat 数据卷（持久化采集进度，避免重启后重复采集）
+    environment:
+      - NODE_NAME=${HOSTNAME}                              # 节点名称（使用主机的 hostname 环境变量）
+    networks:
+      - elk                                                # 连接到 elk 网络
+    depends_on:
+      - ceph-exporter-sidecar                              # 依赖 ceph-exporter（确保日志源先启动）
+      - logstash                                           # 依赖 Logstash（确保日志接收端先启动）
+
+  # ---------------------------------------------------------------------------
+  # ELK Stack（Elasticsearch + Logstash + Kibana）
+  # ---------------------------------------------------------------------------
+
+  # Elasticsearch - 分布式搜索和分析引擎（日志存储和索引）
+  elasticsearch:
+    image: elasticsearch:8.11.0                            # Elasticsearch 8.x 版本
+    container_name: elasticsearch                          # 容器名称
+    environment:
+      - discovery.type=single-node                         # 单节点模式（开发/测试用，生产环境应配置集群）
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"                  # JVM 堆内存限制：最小 512MB，最大 512MB（防止 OOM）
+      - xpack.security.enabled=false                       # 禁用 X-Pack 安全特性（简化开发部署，生产环境应启用）
+    volumes:
+      - es-data:/usr/share/elasticsearch/data              # 数据持久化卷（索引数据存储，避免容器重启丢失数据）
+    ports:
+      - "9200:9200"                                        # REST API 端口（用于查询和管理 Elasticsearch）
+    networks:
+      - elk                                                # 连接到 elk 网络
+
+  # Logstash - 数据处理管道（接收、转换、转发日志）
+  logstash:
+    image: logstash:8.11.0                                 # Logstash 8.x 版本
+    container_name: logstash                               # 容器名称
+    volumes:
+      - ./configs/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro  # 挂载 Logstash 管道配置（只读）
+    ports:
+      - "5044:5044"  # Beats input                         # Beats 协议输入端口（接收 Filebeat/应用直接推送的日志）
+      - "9600:9600"  # Monitoring API                      # Logstash 监控 API 端口（用于查看管道状态和性能指标）
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"                  # JVM 堆内存限制：最小 256MB，最大 256MB
+    networks:
+      - elk                                                # 连接到 elk 网络
+    depends_on:
+      - elasticsearch                                      # 依赖 Elasticsearch（确保存储后端先启动）
+
+  # Kibana - 数据可视化平台（日志查看和分析仪表盘）
+  kibana:
+    image: kibana:8.11.0                                   # Kibana 8.x 版本
+    container_name: kibana                                 # 容器名称
+    ports:
+      - "5601:5601"                                        # Web UI 端口（浏览器访问 http://localhost:5601）
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200      # Elasticsearch 连接地址（使用 Docker 服务名解析）
+    networks:
+      - elk                                                # 连接到 elk 网络
+    depends_on:
+      - elasticsearch                                      # 依赖 Elasticsearch
+
+# -----------------------------------------------------------------------------
+# 网络定义
+# -----------------------------------------------------------------------------
+networks:
+  elk:
+    driver: bridge                                         # 桥接网络驱动（所有服务在同一虚拟网络中，通过服务名互相访问）
+
+# -----------------------------------------------------------------------------
+# 数据卷定义
+# -----------------------------------------------------------------------------
+volumes:
+  es-data:                                                 # Elasticsearch 数据持久化卷
+  filebeat-data:                                           # Filebeat 采集进度持久化卷
+  ceph-logs:                                               # ceph-exporter 日志共享卷

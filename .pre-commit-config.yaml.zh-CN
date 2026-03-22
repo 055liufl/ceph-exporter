@@ -1,0 +1,129 @@
+# =============================================================================
+# Pre-commit 钩子配置文件（完整版）
+# =============================================================================
+#
+# 【文件用途】
+#   定义 Git pre-commit 钩子，在每次 git commit 前自动运行代码质量检查。
+#   pre-commit 是一个 Git 钩子管理框架，它会在提交代码前自动执行配置好的
+#   检查工具，确保代码风格一致、格式正确、无常见错误。
+#
+# 【使用方法】
+#   1. 安装 pre-commit: pip install pre-commit
+#   2. 启用钩子:        pre-commit install
+#   3. 手动运行全部检查: pre-commit run --all-files
+#   4. 跳过检查提交:    git commit --no-verify（不推荐）
+#
+# 【工作原理】
+#   当执行 git commit 时，pre-commit 会：
+#     a) 根据 files 匹配规则找到受影响的文件
+#     b) 依次运行每个 hook 的检查命令
+#     c) 如果任何 hook 失败，则阻止提交并显示错误信息
+#     d) 某些 hook（如 go-fmt）会自动修复文件，需要重新 git add
+#
+# 【项目结构说明】
+#   本项目的 Go 代码位于 ceph-exporter/ 子目录中，因此所有 Go 相关的
+#   hook 都使用 files: ^ceph-exporter/.*\.go$ 来限定作用范围，
+#   并通过 cd ceph-exporter 切换到正确的工作目录。
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 仓库与钩子定义
+# -----------------------------------------------------------------------------
+repos:
+  # ---------------------------------------------------------------------------
+  # 通用代码质量钩子（来自 pre-commit 官方仓库）
+  # ---------------------------------------------------------------------------
+  # 提供与语言无关的通用文件检查功能
+  - repo: https://github.com/pre-commit/pre-commit-hooks  # 官方通用钩子仓库
+    rev: v4.6.0  # v4.x 支持 Python 3.8+, v5.0.0+ 需要 Python 3.9+  # 钩子版本（锁定以保证可重复性）
+    hooks:
+      # 删除行尾多余的空白字符
+      - id: trailing-whitespace                            # 钩子标识符
+        args: ['--markdown-linebreak-ext=md']              # 保留 Markdown 中用于换行的双空格
+
+      # 确保文件以空行结尾（POSIX 标准）
+      - id: end-of-file-fixer                              # 文件末尾修复器
+        exclude: 'ceph-exporter/deployments/filebeat/filebeat\.yml$'  # 排除 filebeat.yml（该文件有特殊格式要求）
+
+      # 检查 YAML 文件语法是否正确
+      - id: check-yaml                                     # YAML 语法检查
+        args: ['--allow-multiple-documents']                # 允许单文件内包含多个 YAML 文档（用 --- 分隔）
+        exclude: '\.zh-CN\.(yaml|yml)$'                    # 排除中文注释文件（注释可能导致解析问题）
+
+      # 检查 JSON 文件语法是否正确
+      - id: check-json                                     # JSON 语法检查
+
+      # 检查是否有未解决的 Git 合并冲突标记（<<<<<<<, =======, >>>>>>>）
+      - id: check-merge-conflict                           # 合并冲突检测
+
+      # 检查是否有私钥文件被意外提交
+      - id: detect-private-key                             # 私钥泄露检测
+
+      # 统一行结束符为 LF（跨平台一致性）
+      - id: mixed-line-ending                              # 行结束符统一
+        args: ['--fix=lf']                                 # 强制使用 Unix 风格换行符（LF）
+
+      # 检查文件名大小写冲突（Windows 与 Linux 文件系统差异）
+      - id: check-case-conflict                            # 文件名大小写冲突检测
+
+  # ---------------------------------------------------------------------------
+  # 本地 Go 工具钩子
+  # ---------------------------------------------------------------------------
+  # 使用本地安装的 Go 工具（避免 Windows 兼容性问题）
+  # 注意: 需要先安装 Go 和相关工具才能使用这些检查
+  # 如果没有安装 Go,可以注释掉下面的 hooks
+  - repo: local                                            # 使用本地命令（不从远程仓库拉取）
+    hooks:
+      # 取消注释以下 hooks 需要先安装:
+      # - Go: https://go.dev/dl/
+      # - goimports: go install golang.org/x/tools/cmd/goimports@latest
+      # - golangci-lint: https://golangci-lint.run/usage/install/
+
+      # Go 代码格式化（使用 gofmt -s 简化代码）
+      - id: go-fmt                                         # Go 格式化钩子
+        name: go fmt                                       # 显示名称
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && gofmt -s -w $(find . -name "*.go" -not -path "./deployments/*")'  # 格式化命令：-s 简化代码，-w 直接写入文件
+        language: system                                   # 使用系统已安装的工具
+        files: ^ceph-exporter/.*\.go$                      # 只对 ceph-exporter 目录下的 Go 文件生效
+        pass_filenames: false                              # 不传递文件名（由命令自行查找文件）
+
+      # Go import 语句排序与分组（按本地包分组）
+      - id: goimports                                      # import 排序钩子
+        name: goimports                                    # 显示名称
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && goimports -local ceph-exporter -w $(find . -name "*.go" -not -path "./deployments/*")'  # -local 指定本地包前缀，用于分组排序
+        language: system                                   # 使用系统已安装的工具
+        files: ^ceph-exporter/.*\.go$                      # 只对 Go 文件生效
+        pass_filenames: false                              # 不传递文件名
+
+      # Go 静态分析（检查可疑的代码构造）
+      - id: go-vet                                         # Go 静态分析钩子
+        name: go vet                                       # 显示名称
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && go vet -tags octopus ./cmd/... ./internal/... ./test/...'  # -tags octopus 启用 Ceph Octopus 版本构建标签
+        language: system                                   # 使用系统已安装的工具
+        files: ^ceph-exporter/.*\.go$                      # 只对 Go 文件生效
+        pass_filenames: false                              # 不传递文件名
+
+      # Go 综合代码检查工具（集成多种 linter）
+      - id: golangci-lint                                  # 综合 lint 钩子
+        name: golangci-lint                                # 显示名称
+        entry: bash -c 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin && cd ceph-exporter && golangci-lint run --build-tags octopus --config ../.golangci.yml --timeout 5m ./cmd/... ./internal/... ./test/...'  # --build-tags octopus 构建标签；--config 指定配置文件；--timeout 超时时间
+        language: system                                   # 使用系统已安装的工具
+        files: ^ceph-exporter/.*\.go$                      # 只对 Go 文件生效
+        pass_filenames: false                              # 不传递文件名
+
+# -----------------------------------------------------------------------------
+# 全局排除规则
+# -----------------------------------------------------------------------------
+# 以下文件/目录不会被任何 hook 检查（使用正则表达式）
+exclude: |
+  (?x)^(
+    vendor/|                          # 第三方依赖目录（由 go mod vendor 管理）
+    .*\.pb\.go$|                      # Protocol Buffers 生成的 Go 文件
+    .*_generated\.go$|                # 其他代码生成器生成的文件
+    build/|                           # 构建输出目录
+    .git/|                            # Git 内部目录
+    .*\.exe$|                         # Windows 可执行文件
+    .*\.zh-CN\.(yaml|yml)$|           # 中文注释版配置文件（非标准 YAML）
+    ceph_exporter/|                   # 旧版目录（已弃用）
+    pre-commit/                       # pre-commit 相关脚本目录
+  )$
