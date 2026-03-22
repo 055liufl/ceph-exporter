@@ -70,8 +70,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./prometheus/prometheus.zh-CN.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.zh-CN.yml:/etc/prometheus/alert_rules.yml:ro
       - ./data/prometheus:/prometheus
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
@@ -117,6 +117,7 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_DEFAULT_LOCALE=zh-CN
     networks:
       - ceph-monitor-net
     healthcheck:
@@ -144,7 +145,7 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/alertmanager.zh-CN.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./data/alertmanager:/alertmanager
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro

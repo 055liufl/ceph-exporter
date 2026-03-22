@@ -349,13 +349,17 @@ deploy_full() {
 
     cd "$DEPLOY_DIR"
 
-    # 构建 ceph-exporter:dev 镜像
-    log_info "构建 ceph-exporter:dev 镜像..."
-    cd "$PROJECT_DIR"
-    docker build -t ceph-exporter:dev -f Dockerfile . || {
-        log_error "构建 ceph-exporter:dev 镜像失败"
-        exit 1
-    }
+    # 检查 ceph-exporter:dev 镜像是否存在，不存在则构建
+    if docker image inspect ceph-exporter:dev >/dev/null 2>&1; then
+        log_info "镜像 ceph-exporter:dev 已存在，跳过构建"
+    else
+        log_info "镜像 ceph-exporter:dev 不存在，开始构建..."
+        cd "$PROJECT_DIR"
+        docker build -t ceph-exporter:dev -f Dockerfile . || {
+            log_error "构建 ceph-exporter:dev 镜像失败"
+            exit 1
+        }
+    fi
 
     cd "$DEPLOY_DIR"
 
